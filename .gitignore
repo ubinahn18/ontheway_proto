@@ -1,0 +1,5 @@
+.DS_Store
+Thumbs.db
+supabase/.temp/
+expo-qr*.png
+.claude/scheduled_tasks.lock
