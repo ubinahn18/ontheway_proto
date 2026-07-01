@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "151295299108",
+    "project_id": "ontheway-proto",
+    "storage_bucket": "ontheway-proto.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:151295299108:android:63cca00b4fce248eab52b1",
+        "android_client_info": {
+          "package_name": "com.ubinahn18.ontheway"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCRCs3WFM_DaHCx91dsRhjJYscAFQoGjAo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
