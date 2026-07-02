@@ -14,23 +14,29 @@ Notifications.setNotificationHandler({
 });
 
 export async function registerForPushNotificationsAsync(userId: string) {
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.DEFAULT,
-    });
+  try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.DEFAULT,
+      });
+    }
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') return;
+
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+
+    await supabase.from('profiles').update({ expo_push_token: token }).eq('id', userId);
+  } catch (e) {
+    // remote push (getExpoPushTokenAsync) isn't supported in Expo Go since SDK 53 —
+    // fails here instead of crashing the app on login
+    console.warn('push registration skipped:', e instanceof Error ? e.message : e);
   }
-
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-  if (finalStatus !== 'granted') return;
-
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-
-  await supabase.from('profiles').update({ expo_push_token: token }).eq('id', userId);
 }

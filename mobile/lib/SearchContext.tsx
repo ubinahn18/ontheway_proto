@@ -31,6 +31,9 @@ export type Item = {
   valid_until: string;
   status: string;
   uploader_id: string;
+  selected_by: string | null;
+  delivered_at: string | null;
+  completed_at: string | null;
 };
 
 type SearchContextValue = {

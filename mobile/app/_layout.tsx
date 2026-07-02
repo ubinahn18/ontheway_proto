@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../lib/AuthContext';
 import { SearchProvider } from '../lib/SearchContext';
 import { registerForPushNotificationsAsync } from '../lib/notifications';
+import { useItemNotifications } from '../lib/useItemNotifications';
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
@@ -27,6 +28,8 @@ function RootLayoutNav() {
     if (session) registerForPushNotificationsAsync(session.user.id);
   }, [session]);
 
+  useItemNotifications(session?.user.id ?? null);
+
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const itemId = response.notification.request.content.data?.itemId;
@@ -45,6 +48,14 @@ function RootLayoutNav() {
       <Stack.Screen
         name="item/new"
         options={{ headerShown: true, title: '아이템 등록' }}
+      />
+      <Stack.Screen
+        name="history/orders"
+        options={{ headerShown: true, title: '주문 이력' }}
+      />
+      <Stack.Screen
+        name="history/deliveries"
+        options={{ headerShown: true, title: '배송 이력' }}
       />
       <Stack.Screen
         name="auth/sign-in"

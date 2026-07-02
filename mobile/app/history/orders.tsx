@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react';
-import { Button, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import type { Item } from '../../lib/SearchContext';
 import { ItemCard } from '../../components/ItemCard';
 
-export default function MySelectionsScreen() {
+export default function OrderHistoryScreen() {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
 
@@ -22,9 +22,9 @@ export default function MySelectionsScreen() {
           .select(
             'id, title, description, price, photo_url, pickup_address, pickup_district, dropoff_address, dropoff_district, valid_until, status, uploader_id, selected_by, delivered_at, completed_at'
           )
-          .eq('selected_by', user.id)
-          .in('status', ['selected', 'delivered'])
-          .order('selected_at', { ascending: false });
+          .eq('uploader_id', user.id)
+          .eq('status', 'completed')
+          .order('completed_at', { ascending: false });
         if (!cancelled) setItems((data as Item[]) ?? []);
       })();
       return () => {
@@ -38,16 +38,10 @@ export default function MySelectionsScreen() {
       contentContainerStyle={styles.container}
       data={items}
       keyExtractor={(item) => item.id}
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <Button title="배송 이력 보기" onPress={() => router.push('/history/deliveries')} />
-          <Button title="로그아웃" onPress={() => supabase.auth.signOut()} />
-        </View>
-      }
       renderItem={({ item }) => (
         <ItemCard item={item} onPress={() => router.push(`/item/${item.id}`)} />
       )}
-      ListEmptyComponent={<Text style={styles.helperText}>선택한 아이템이 없어요</Text>}
+      ListEmptyComponent={<Text style={styles.helperText}>완료된 주문이 없어요</Text>}
     />
   );
 }
@@ -56,9 +50,6 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     gap: 12,
-  },
-  header: {
-    gap: 8,
   },
   helperText: {
     color: '#555',

@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
 import { useSearch, type Item } from '../../lib/SearchContext';
+import { statusLabel } from '../../lib/itemStatus';
 
 type NaviResult = {
   directDurationSec: number;
@@ -31,6 +32,8 @@ export default function ItemDetailScreen() {
   const [naviError, setNaviError] = useState<string | null>(null);
   const [naviLoading, setNaviLoading] = useState(false);
   const [selecting, setSelecting] = useState(false);
+  const [delivering, setDelivering] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,6 +82,36 @@ export default function ItemDetailScreen() {
     }
   }
 
+  async function markDelivered() {
+    if (!item) return;
+    setDelivering(true);
+    try {
+      const { error } = await supabase.rpc('mark_delivered', { p_item_id: item.id });
+      if (error) throw error;
+      Alert.alert('배송 완료 처리했어요', '업로더에게 알림이 전송됐어요');
+      router.back();
+    } catch (e) {
+      Alert.alert('처리 실패', e instanceof Error ? e.message : String(e));
+    } finally {
+      setDelivering(false);
+    }
+  }
+
+  async function confirmDelivery() {
+    if (!item) return;
+    setConfirming(true);
+    try {
+      const { error } = await supabase.rpc('confirm_delivery', { p_item_id: item.id });
+      if (error) throw error;
+      Alert.alert('배송을 확인했어요', '거래가 완료됐어요');
+      router.back();
+    } catch (e) {
+      Alert.alert('처리 실패', e instanceof Error ? e.message : String(e));
+    } finally {
+      setConfirming(false);
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -96,8 +129,11 @@ export default function ItemDetailScreen() {
   }
 
   const isOwnItem = currentUserId === item.uploader_id;
+  const isSelector = currentUserId === item.selected_by;
   const isExpired = new Date(item.valid_until).getTime() < Date.now();
   const canSelect = item.status === 'available' && !isOwnItem && !isExpired;
+  const canMarkDelivered = item.status === 'selected' && isSelector;
+  const canConfirmDelivery = item.status === 'delivered' && isOwnItem;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -135,7 +171,7 @@ export default function ItemDetailScreen() {
               : isExpired
                 ? '마감된 아이템이에요'
                 : item.status !== 'available'
-                  ? '이미 선택된 아이템이에요'
+                  ? statusLabel(item.status)
                   : selecting
                     ? '선택 중...'
                     : '선택하기'
@@ -144,6 +180,26 @@ export default function ItemDetailScreen() {
           disabled={!canSelect || selecting}
         />
       </View>
+
+      {canMarkDelivered && (
+        <View style={styles.selectRow}>
+          <Button
+            title={delivering ? '처리 중...' : '배송 완료'}
+            onPress={markDelivered}
+            disabled={delivering}
+          />
+        </View>
+      )}
+
+      {canConfirmDelivery && (
+        <View style={styles.selectRow}>
+          <Button
+            title={confirming ? '처리 중...' : '배송 확인'}
+            onPress={confirmDelivery}
+            disabled={confirming}
+          />
+        </View>
+      )}
     </ScrollView>
   );
 }
