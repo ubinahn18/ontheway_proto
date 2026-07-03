@@ -41,6 +41,7 @@ export default function MySelectionsScreen() {
       ListHeaderComponent={
         <View style={styles.header}>
           <Button title="배송 이력 보기" onPress={() => router.push('/history/deliveries')} />
+          <Button title="약관 보기" onPress={() => router.push('/terms')} />
           <Button title="로그아웃" onPress={() => supabase.auth.signOut()} />
         </View>
       }

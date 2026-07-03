@@ -53,8 +53,17 @@ Deno.serve(async (req) => {
 
   const directDurationSec = directData.routes?.[0]?.summary?.duration;
   const viaDurationSec = viaData.routes?.[0]?.summary?.duration;
+  const directDistanceMeters = directData.routes?.[0]?.summary?.distance;
+  const viaDistanceMeters = viaData.routes?.[0]?.summary?.distance;
+  const directTollFare = directData.routes?.[0]?.summary?.fare?.toll ?? 0;
+  const viaTollFare = viaData.routes?.[0]?.summary?.fare?.toll ?? 0;
 
-  if (typeof directDurationSec !== 'number' || typeof viaDurationSec !== 'number') {
+  if (
+    typeof directDurationSec !== 'number' ||
+    typeof viaDurationSec !== 'number' ||
+    typeof directDistanceMeters !== 'number' ||
+    typeof viaDistanceMeters !== 'number'
+  ) {
     return new Response(
       JSON.stringify({ error: 'unexpected kakao navi response', directData, viaData }),
       { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -66,6 +75,9 @@ Deno.serve(async (req) => {
       directDurationSec,
       viaDurationSec,
       diffMinutes: Math.round((viaDurationSec - directDurationSec) / 60),
+      // extra distance/toll caused by the detour, not the full via-route totals
+      extraDistanceMeters: viaDistanceMeters - directDistanceMeters,
+      extraTollFare: viaTollFare - directTollFare,
     }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );

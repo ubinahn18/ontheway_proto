@@ -24,14 +24,17 @@ export type Item = {
   pickup_district: string | null;
   pickup_lng: number;
   pickup_lat: number;
+  pickup_instruction: string | null;
   dropoff_address: string;
   dropoff_district: string | null;
   dropoff_lng: number;
   dropoff_lat: number;
+  dropoff_instruction: string | null;
   valid_until: string;
   status: string;
   uploader_id: string;
   selected_by: string | null;
+  delivery_eta: string | null;
   delivered_at: string | null;
   completed_at: string | null;
 };

@@ -17,7 +17,10 @@ export function useItemNotifications(userId: string | null) {
         { event: 'UPDATE', schema: 'public', table: 'items', filter: `uploader_id=eq.${userId}` },
         ({ old: oldItem, new: newItem }) => {
           if (oldItem.status === 'available' && newItem.status === 'selected') {
-            Alert.alert('아이템이 선택되었어요', `"${newItem.title}"이(가) 선택되었어요.`);
+            const etaText = newItem.delivery_eta
+              ? ` 예상 도착: ${new Date(newItem.delivery_eta).toLocaleString()}`
+              : '';
+            Alert.alert('아이템이 선택되었어요', `"${newItem.title}"이(가) 선택되었어요.${etaText}`);
           } else if (oldItem.status === 'selected' && newItem.status === 'delivered') {
             Alert.alert('배송이 완료됐어요', `"${newItem.title}"이(가) 배송 완료됐어요. 확인해주세요.`);
           }

@@ -47,7 +47,7 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="item/new"
-        options={{ headerShown: true, title: '아이템 등록' }}
+        options={{ headerShown: true, title: '배송요청 등록' }}
       />
       <Stack.Screen
         name="history/orders"
@@ -60,6 +60,10 @@ function RootLayoutNav() {
       <Stack.Screen
         name="auth/sign-in"
         options={{ headerShown: true, title: '로그인' }}
+      />
+      <Stack.Screen
+        name="terms"
+        options={{ headerShown: true, title: '이용약관' }}
       />
     </Stack>
   );

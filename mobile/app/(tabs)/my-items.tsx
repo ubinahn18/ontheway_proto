@@ -41,7 +41,7 @@ export default function MyItemsScreen() {
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <>
-          <Button title="새 아이템 등록" onPress={() => router.push('/item/new')} />
+          <Button title="배송요청 등록" onPress={() => router.push('/item/new')} />
           <Button title="주문 이력 보기" onPress={() => router.push('/history/orders')} />
         </>
       }

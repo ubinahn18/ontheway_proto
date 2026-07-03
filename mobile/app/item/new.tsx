@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +19,9 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
 import type { Place } from '../../lib/SearchContext';
+import { InstructionPicker } from '../../components/InstructionPicker';
+import { MAX_ITEM_PRICE } from '../../lib/constants';
+import { calcPlatformFee } from '../../lib/fee';
 
 export default function NewItemScreen() {
   const router = useRouter();
@@ -26,17 +30,26 @@ export default function NewItemScreen() {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
 
+  const [pickupQuery, setPickupQuery] = useState('');
   const [pickup, setPickup] = useState<Place | null>(null);
+  const [pickupInstruction, setPickupInstruction] = useState('');
   const [locating, setLocating] = useState(false);
+  const [searchingPickup, setSearchingPickup] = useState(false);
 
   const [dropoffQuery, setDropoffQuery] = useState('');
   const [dropoff, setDropoff] = useState<Place | null>(null);
+  const [dropoffInstruction, setDropoffInstruction] = useState('');
   const [searchingDropoff, setSearchingDropoff] = useState(false);
 
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [validUntil, setValidUntil] = useState(new Date(Date.now() + 60 * 60 * 1000));
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const priceNumber = Number(price) || 0;
+  const exceedsMaxPrice = priceNumber > MAX_ITEM_PRICE;
+  const platformFee = calcPlatformFee(priceNumber);
 
   async function usePickupCurrentLocation() {
     setLocating(true);
@@ -58,6 +71,19 @@ export default function NewItemScreen() {
       Alert.alert('위치를 가져오지 못했어요', e instanceof Error ? e.message : String(e));
     } finally {
       setLocating(false);
+    }
+  }
+
+  async function searchPickup() {
+    if (!pickupQuery.trim()) return;
+    setSearchingPickup(true);
+    try {
+      const data = await callFunction<Place>('kakao-address-search', { query: pickupQuery });
+      setPickup(data);
+    } catch (e) {
+      Alert.alert('주소를 찾지 못했어요', e instanceof Error ? e.message : String(e));
+    } finally {
+      setSearchingPickup(false);
     }
   }
 
@@ -94,6 +120,14 @@ export default function NewItemScreen() {
       Alert.alert('제목, 가격, 사진, 픽업지, 도착지를 모두 입력해주세요');
       return;
     }
+    if (exceedsMaxPrice) {
+      Alert.alert('가격 상한 초과', `가격은 최대 ${MAX_ITEM_PRICE.toLocaleString()}원까지 등록할 수 있어요`);
+      return;
+    }
+    if (!agreedToTerms) {
+      Alert.alert('이용약관에 동의해주세요');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -119,16 +153,18 @@ export default function NewItemScreen() {
       const { error: insertError } = await supabase.rpc('insert_item', {
         p_title: title,
         p_description: description || null,
-        p_price: Number(price),
+        p_price: priceNumber,
         p_photo_url: publicUrl,
         p_pickup_address: pickup.address,
         p_pickup_district: pickup.district,
         p_pickup_lng: pickup.lng,
         p_pickup_lat: pickup.lat,
+        p_pickup_instruction: pickupInstruction || null,
         p_dropoff_address: dropoff.address,
         p_dropoff_district: dropoff.district,
         p_dropoff_lng: dropoff.lng,
         p_dropoff_lat: dropoff.lat,
+        p_dropoff_instruction: dropoffInstruction || null,
         p_valid_until: validUntil.toISOString(),
       });
       if (insertError) throw insertError;
@@ -140,6 +176,8 @@ export default function NewItemScreen() {
       setSubmitting(false);
     }
   }
+
+  const canSubmit = !exceedsMaxPrice && agreedToTerms && !submitting;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -158,6 +196,15 @@ export default function NewItemScreen() {
         onChangeText={setPrice}
         keyboardType="number-pad"
       />
+      {exceedsMaxPrice ? (
+        <Text style={styles.errorText}>
+          가격은 최대 {MAX_ITEM_PRICE.toLocaleString()}원까지 등록할 수 있어요
+        </Text>
+      ) : (
+        priceNumber > 0 && (
+          <Text style={styles.helperText}>플랫폼 수수료: {platformFee.toLocaleString()}원</Text>
+        )
+      )}
 
       <Text style={styles.sectionTitle}>픽업지 (물건이 있는 곳)</Text>
       <Button
@@ -166,11 +213,25 @@ export default function NewItemScreen() {
         disabled={locating}
       />
       {locating && <ActivityIndicator />}
+      <TextInput
+        style={styles.input}
+        placeholder="픽업지 주소 검색"
+        value={pickupQuery}
+        onChangeText={setPickupQuery}
+      />
+      <Button
+        title={searchingPickup ? '검색 중...' : '주소 검색'}
+        onPress={searchPickup}
+        disabled={searchingPickup || !pickupQuery.trim()}
+      />
+      {searchingPickup && <ActivityIndicator />}
       {pickup && (
         <Text style={styles.helperText}>
           {pickup.address} {pickup.district ? `(${pickup.district})` : ''}
         </Text>
       )}
+      <Text style={styles.instructionLabel}>픽업 방법 안내</Text>
+      <InstructionPicker value={pickupInstruction} onChange={setPickupInstruction} />
 
       <Text style={styles.sectionTitle}>도착지 (물건이 가야 하는 곳)</Text>
       <TextInput
@@ -190,6 +251,8 @@ export default function NewItemScreen() {
           {dropoff.address} {dropoff.district ? `(${dropoff.district})` : ''}
         </Text>
       )}
+      <Text style={styles.instructionLabel}>드랍 방법 안내</Text>
+      <InstructionPicker value={dropoffInstruction} onChange={setDropoffInstruction} />
 
       <Button title="사진 선택" onPress={pickPhoto} />
       {photoUri && <Image source={{ uri: photoUri }} style={styles.preview} />}
@@ -207,8 +270,20 @@ export default function NewItemScreen() {
         />
       )}
 
+      <Pressable style={styles.termsRow} onPress={() => setAgreedToTerms((v) => !v)}>
+        <Text style={styles.checkbox}>{agreedToTerms ? '☑' : '☐'}</Text>
+        <Text style={styles.termsText}>이용약관에 동의합니다</Text>
+      </Pressable>
+      <Pressable onPress={() => router.push('/terms')}>
+        <Text style={styles.termsLink}>약관 보기</Text>
+      </Pressable>
+
       <View style={styles.submitRow}>
-        <Button title={submitting ? '등록 중...' : '등록하기'} onPress={submit} disabled={submitting} />
+        <Button
+          title={submitting ? '등록 중...' : '등록하기'}
+          onPress={submit}
+          disabled={!canSubmit}
+        />
       </View>
     </ScrollView>
   );
@@ -229,13 +304,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 8,
   },
+  instructionLabel: {
+    fontWeight: '500',
+    fontSize: 13,
+    color: '#333',
+    marginTop: 4,
+  },
   helperText: {
     color: '#555',
+  },
+  errorText: {
+    color: '#c0392b',
+    fontWeight: '600',
   },
   preview: {
     width: '100%',
     height: 200,
     borderRadius: 8,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  checkbox: {
+    fontSize: 18,
+  },
+  termsText: {
+    fontSize: 14,
+  },
+  termsLink: {
+    color: '#2A5FD9',
+    fontSize: 13,
+    textDecorationLine: 'underline',
   },
   submitRow: {
     marginTop: 12,

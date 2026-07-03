@@ -9,16 +9,20 @@ import {
   Text,
   View,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
 import { useSearch, type Item } from '../../lib/SearchContext';
 import { statusLabel } from '../../lib/itemStatus';
+import { FUEL_EFFICIENCY_KM_PER_L, FUEL_PRICE_PER_L } from '../../lib/constants';
 
 type NaviResult = {
   directDurationSec: number;
   viaDurationSec: number;
   diffMinutes: number;
+  extraDistanceMeters: number;
+  extraTollFare: number;
 };
 
 export default function ItemDetailScreen() {
@@ -35,6 +39,8 @@ export default function ItemDetailScreen() {
   const [delivering, setDelivering] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [deliveryEta, setDeliveryEta] = useState<Date | null>(null);
+  const [showEtaPicker, setShowEtaPicker] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -69,9 +75,16 @@ export default function ItemDetailScreen() {
 
   async function select() {
     if (!item) return;
+    if (!deliveryEta) {
+      Alert.alert('배달 예상시각을 선택해주세요');
+      return;
+    }
     setSelecting(true);
     try {
-      const { error } = await supabase.rpc('select_item', { p_item_id: item.id });
+      const { error } = await supabase.rpc('select_item', {
+        p_item_id: item.id,
+        p_delivery_eta: deliveryEta.toISOString(),
+      });
       if (error) throw error;
       Alert.alert('선택 완료', '업로더에게 알림이 전송됐어요');
       router.back();
@@ -144,13 +157,26 @@ export default function ItemDetailScreen() {
 
       <Text style={styles.sectionTitle}>픽업지</Text>
       <Text>{item.pickup_address}</Text>
+      {item.pickup_instruction && (
+        <Text style={styles.helperText}>안내: {item.pickup_instruction}</Text>
+      )}
       <Text style={styles.sectionTitle}>도착지</Text>
       <Text>{item.dropoff_address}</Text>
+      {item.dropoff_instruction && (
+        <Text style={styles.helperText}>안내: {item.dropoff_instruction}</Text>
+      )}
 
       <Text style={styles.sectionTitle}>마감 시각</Text>
       <Text>{new Date(item.valid_until).toLocaleString()}</Text>
 
-      <Text style={styles.sectionTitle}>경유 시 추가 소요 시간</Text>
+      {(item.status === 'selected' || item.status === 'delivered') && item.delivery_eta && (
+        <>
+          <Text style={styles.sectionTitle}>배달 예상 시각</Text>
+          <Text>{new Date(item.delivery_eta).toLocaleString()}</Text>
+        </>
+      )}
+
+      <Text style={styles.sectionTitle}>경유 시 추가 소요 시간 · 비용 추정</Text>
       {!origin || !destination ? (
         <Text style={styles.helperText}>
           둘러보기 탭에서 내 출발지/목적지를 먼저 설정해야 계산할 수 있어요
@@ -160,8 +186,45 @@ export default function ItemDetailScreen() {
       ) : naviError ? (
         <Text style={styles.helperText}>{naviError}</Text>
       ) : navi ? (
-        <Text style={styles.diff}>+{navi.diffMinutes}분 더 소요</Text>
+        <>
+          <Text style={styles.diff}>+{navi.diffMinutes}분 더 소요</Text>
+          <Text style={styles.helperText}>
+            추정 주유비: 약{' '}
+            {Math.max(
+              0,
+              Math.round(
+                (navi.extraDistanceMeters / 1000 / FUEL_EFFICIENCY_KM_PER_L) * FUEL_PRICE_PER_L
+              )
+            ).toLocaleString()}
+            원
+          </Text>
+          <Text style={styles.helperText}>
+            추정 도로비 차이: 약 {Math.max(0, navi.extraTollFare).toLocaleString()}원
+          </Text>
+        </>
       ) : null}
+
+      {canSelect && (
+        <>
+          <Text style={styles.sectionTitle}>배달 예상 시각</Text>
+          <Button
+            title={
+              deliveryEta ? deliveryEta.toLocaleString() : '배달 예상 시각 선택'
+            }
+            onPress={() => setShowEtaPicker(true)}
+          />
+          {showEtaPicker && (
+            <DateTimePicker
+              value={deliveryEta ?? new Date()}
+              mode="datetime"
+              onChange={(_, date) => {
+                setShowEtaPicker(false);
+                if (date) setDeliveryEta(date);
+              }}
+            />
+          )}
+        </>
+      )}
 
       <View style={styles.selectRow}>
         <Button
@@ -177,7 +240,7 @@ export default function ItemDetailScreen() {
                     : '선택하기'
           }
           onPress={select}
-          disabled={!canSelect || selecting}
+          disabled={!canSelect || selecting || !deliveryEta}
         />
       </View>
 
