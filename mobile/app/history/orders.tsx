@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import type { Item } from '../../lib/SearchContext';
 import { ItemCard } from '../../components/ItemCard';
+import { colors, spacing, typography } from '../../lib/theme';
 
 export default function OrderHistoryScreen() {
   const router = useRouter();
@@ -41,17 +43,27 @@ export default function OrderHistoryScreen() {
       renderItem={({ item }) => (
         <ItemCard item={item} onPress={() => router.push(`/item/${item.id}`)} />
       )}
-      ListEmptyComponent={<Text style={styles.helperText}>완료된 주문이 없어요</Text>}
+      ListEmptyComponent={
+        <View style={styles.emptyState}>
+          <Ionicons name="receipt-outline" size={32} color={colors.textSecondary} />
+          <Text style={styles.helperText}>완료된 주문이 없어요</Text>
+        </View>
+      }
     />
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    gap: 12,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   helperText: {
-    color: '#555',
+    ...typography.caption,
+  },
+  emptyState: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xxl,
   },
 });

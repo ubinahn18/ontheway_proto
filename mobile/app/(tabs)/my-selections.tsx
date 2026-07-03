@@ -1,9 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Button, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import type { Item } from '../../lib/SearchContext';
 import { ItemCard } from '../../components/ItemCard';
+import { Button } from '../../components/ui/Button';
+import { colors, spacing, typography } from '../../lib/theme';
 
 export default function MySelectionsScreen() {
   const router = useRouter();
@@ -41,27 +44,37 @@ export default function MySelectionsScreen() {
       ListHeaderComponent={
         <View style={styles.header}>
           <Button title="배송 이력 보기" onPress={() => router.push('/history/deliveries')} />
-          <Button title="약관 보기" onPress={() => router.push('/terms')} />
-          <Button title="로그아웃" onPress={() => supabase.auth.signOut()} />
+          <Button title="약관 보기" onPress={() => router.push('/terms')} variant="outline" />
+          <Button title="로그아웃" onPress={() => supabase.auth.signOut()} variant="ghost" />
         </View>
       }
       renderItem={({ item }) => (
         <ItemCard item={item} onPress={() => router.push(`/item/${item.id}`)} />
       )}
-      ListEmptyComponent={<Text style={styles.helperText}>선택한 아이템이 없어요</Text>}
+      ListEmptyComponent={
+        <View style={styles.emptyState}>
+          <Ionicons name="bag-check-outline" size={32} color={colors.textSecondary} />
+          <Text style={styles.helperText}>선택한 아이템이 없어요</Text>
+        </View>
+      }
     />
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    gap: 12,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   header: {
-    gap: 8,
+    gap: spacing.sm,
   },
   helperText: {
-    color: '#555',
+    ...typography.caption,
+  },
+  emptyState: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xxl,
   },
 });

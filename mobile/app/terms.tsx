@@ -1,4 +1,6 @@
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, radius, shadow, spacing, typography } from '../lib/theme';
 
 // placeholder copy — replace with the actual terms before launch. Needs to
 // cover penalties, liability for theft/damage, and the per-item price ceiling.
@@ -12,24 +14,40 @@ const PLACEHOLDER_TERMS = `1. (자리표시자) 배송 중 분실·파손에 대
 export default function TermsScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>이용약관</Text>
-      <Text style={styles.body}>{PLACEHOLDER_TERMS}</Text>
+      <View style={styles.titleRow}>
+        <Ionicons name="document-text" size={20} color={colors.primary} />
+        <Text style={styles.title}>이용약관</Text>
+      </View>
+      <View style={styles.card}>
+        <Text style={styles.body}>{PLACEHOLDER_TERMS}</Text>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    gap: 12,
+    padding: spacing.lg,
+    gap: spacing.md,
+    backgroundColor: colors.background,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
+    ...typography.title,
+  },
+  card: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadow.card,
   },
   body: {
     fontSize: 14,
-    lineHeight: 22,
-    color: '#333',
+    lineHeight: 24,
+    color: colors.textSecondary,
   },
 });

@@ -2,19 +2,19 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Button,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { File } from 'expo-file-system';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
@@ -22,6 +22,9 @@ import type { Place } from '../../lib/SearchContext';
 import { InstructionPicker } from '../../components/InstructionPicker';
 import { MAX_ITEM_PRICE } from '../../lib/constants';
 import { calcPlatformFee } from '../../lib/fee';
+import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
+import { Button } from '../../components/ui/Button';
+import { TextField } from '../../components/ui/TextField';
 
 export default function NewItemScreen() {
   const router = useRouter();
@@ -115,6 +118,32 @@ export default function NewItemScreen() {
     }
   }
 
+  function openValidUntilPicker() {
+    if (Platform.OS === 'android') {
+      // Android has no combined "datetime" dialog — chain a date picker
+      // into a time picker and merge the two results.
+      DateTimePickerAndroid.open({
+        value: validUntil,
+        mode: 'date',
+        onChange: (_, pickedDate) => {
+          if (!pickedDate) return;
+          DateTimePickerAndroid.open({
+            value: validUntil,
+            mode: 'time',
+            onChange: (_, pickedTime) => {
+              if (!pickedTime) return;
+              const combined = new Date(pickedDate);
+              combined.setHours(pickedTime.getHours(), pickedTime.getMinutes());
+              setValidUntil(combined);
+            },
+          });
+        },
+      });
+    } else {
+      setShowTimePicker(true);
+    }
+  }
+
   async function submit() {
     if (!title || !price || !pickup || !dropoff || !photoUri) {
       Alert.alert('제목, 가격, 사진, 픽업지, 도착지를 모두 입력해주세요');
@@ -181,165 +210,214 @@ export default function NewItemScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <TextInput style={styles.input} placeholder="제목" value={title} onChangeText={setTitle} />
-      <TextInput
-        style={styles.input}
-        placeholder="설명"
-        value={description}
-        onChangeText={setDescription}
-        multiline
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="가격 (원)"
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="number-pad"
-      />
-      {exceedsMaxPrice ? (
-        <Text style={styles.errorText}>
-          가격은 최대 {MAX_ITEM_PRICE.toLocaleString()}원까지 등록할 수 있어요
-        </Text>
-      ) : (
-        priceNumber > 0 && (
-          <Text style={styles.helperText}>플랫폼 수수료: {platformFee.toLocaleString()}원</Text>
-        )
-      )}
-
-      <Text style={styles.sectionTitle}>픽업지 (물건이 있는 곳)</Text>
-      <Button
-        title={locating ? '위치 확인 중...' : '현재 위치 사용'}
-        onPress={usePickupCurrentLocation}
-        disabled={locating}
-      />
-      {locating && <ActivityIndicator />}
-      <TextInput
-        style={styles.input}
-        placeholder="픽업지 주소 검색"
-        value={pickupQuery}
-        onChangeText={setPickupQuery}
-      />
-      <Button
-        title={searchingPickup ? '검색 중...' : '주소 검색'}
-        onPress={searchPickup}
-        disabled={searchingPickup || !pickupQuery.trim()}
-      />
-      {searchingPickup && <ActivityIndicator />}
-      {pickup && (
-        <Text style={styles.helperText}>
-          {pickup.address} {pickup.district ? `(${pickup.district})` : ''}
-        </Text>
-      )}
-      <Text style={styles.instructionLabel}>픽업 방법 안내</Text>
-      <InstructionPicker value={pickupInstruction} onChange={setPickupInstruction} />
-
-      <Text style={styles.sectionTitle}>도착지 (물건이 가야 하는 곳)</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="도착지 주소 검색"
-        value={dropoffQuery}
-        onChangeText={setDropoffQuery}
-      />
-      <Button
-        title={searchingDropoff ? '검색 중...' : '주소 검색'}
-        onPress={searchDropoff}
-        disabled={searchingDropoff || !dropoffQuery.trim()}
-      />
-      {searchingDropoff && <ActivityIndicator />}
-      {dropoff && (
-        <Text style={styles.helperText}>
-          {dropoff.address} {dropoff.district ? `(${dropoff.district})` : ''}
-        </Text>
-      )}
-      <Text style={styles.instructionLabel}>드랍 방법 안내</Text>
-      <InstructionPicker value={dropoffInstruction} onChange={setDropoffInstruction} />
-
-      <Button title="사진 선택" onPress={pickPhoto} />
-      {photoUri && <Image source={{ uri: photoUri }} style={styles.preview} />}
-
-      <Text style={styles.helperText}>마감 시각: {validUntil.toLocaleString()}</Text>
-      <Button title="마감 시각 변경" onPress={() => setShowTimePicker(true)} />
-      {showTimePicker && (
-        <DateTimePicker
-          value={validUntil}
-          mode="datetime"
-          onChange={(_, date) => {
-            setShowTimePicker(false);
-            if (date) setValidUntil(date);
-          }}
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="document-text" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>기본 정보</Text>
+        </View>
+        <TextField label="제목" placeholder="예: 노트북 파우치" value={title} onChangeText={setTitle} />
+        <TextField
+          label="설명"
+          placeholder="물건에 대한 설명을 적어주세요"
+          value={description}
+          onChangeText={setDescription}
+          multiline
         />
-      )}
-
-      <Pressable style={styles.termsRow} onPress={() => setAgreedToTerms((v) => !v)}>
-        <Text style={styles.checkbox}>{agreedToTerms ? '☑' : '☐'}</Text>
-        <Text style={styles.termsText}>이용약관에 동의합니다</Text>
-      </Pressable>
-      <Pressable onPress={() => router.push('/terms')}>
-        <Text style={styles.termsLink}>약관 보기</Text>
-      </Pressable>
-
-      <View style={styles.submitRow}>
-        <Button
-          title={submitting ? '등록 중...' : '등록하기'}
-          onPress={submit}
-          disabled={!canSubmit}
+        <TextField
+          label="가격 (원)"
+          placeholder="가격 (원)"
+          value={price}
+          onChangeText={setPrice}
+          keyboardType="number-pad"
         />
+        {exceedsMaxPrice ? (
+          <Text style={styles.errorText}>
+            가격은 최대 {MAX_ITEM_PRICE.toLocaleString()}원까지 등록할 수 있어요
+          </Text>
+        ) : (
+          priceNumber > 0 && (
+            <View style={styles.feeBanner}>
+              <Ionicons name="information-circle" size={16} color={colors.primary} />
+              <Text style={styles.feeText}>플랫폼 수수료: {platformFee.toLocaleString()}원</Text>
+            </View>
+          )
+        )}
       </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="location" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>픽업지 (물건이 있는 곳)</Text>
+        </View>
+        <Button
+          title={locating ? '위치 확인 중...' : '현재 위치 사용'}
+          onPress={usePickupCurrentLocation}
+          disabled={locating}
+          variant="outline"
+        />
+        {locating && <ActivityIndicator color={colors.primary} />}
+        <TextField placeholder="픽업지 주소 검색" value={pickupQuery} onChangeText={setPickupQuery} />
+        <Button
+          title={searchingPickup ? '검색 중...' : '주소 검색'}
+          onPress={searchPickup}
+          disabled={searchingPickup || !pickupQuery.trim()}
+          variant="outline"
+        />
+        {searchingPickup && <ActivityIndicator color={colors.primary} />}
+        {pickup && (
+          <Text style={styles.helperText}>
+            {pickup.address} {pickup.district ? `(${pickup.district})` : ''}
+          </Text>
+        )}
+        <Text style={styles.instructionLabel}>픽업 방법 안내</Text>
+        <InstructionPicker value={pickupInstruction} onChange={setPickupInstruction} />
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="flag" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>도착지 (물건이 가야 하는 곳)</Text>
+        </View>
+        <TextField placeholder="도착지 주소 검색" value={dropoffQuery} onChangeText={setDropoffQuery} />
+        <Button
+          title={searchingDropoff ? '검색 중...' : '주소 검색'}
+          onPress={searchDropoff}
+          disabled={searchingDropoff || !dropoffQuery.trim()}
+          variant="outline"
+        />
+        {searchingDropoff && <ActivityIndicator color={colors.primary} />}
+        {dropoff && (
+          <Text style={styles.helperText}>
+            {dropoff.address} {dropoff.district ? `(${dropoff.district})` : ''}
+          </Text>
+        )}
+        <Text style={styles.instructionLabel}>드랍 방법 안내</Text>
+        <InstructionPicker value={dropoffInstruction} onChange={setDropoffInstruction} />
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="image" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>사진</Text>
+        </View>
+        <Button title="사진 선택" onPress={pickPhoto} variant="outline" />
+        {photoUri && <Image source={{ uri: photoUri }} style={styles.preview} />}
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="time" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>마감 시각</Text>
+        </View>
+        <Text style={styles.helperText}>{validUntil.toLocaleString()}</Text>
+        <Button title="마감 시각 변경" onPress={openValidUntilPicker} variant="outline" />
+        {Platform.OS === 'ios' && showTimePicker && (
+          <>
+            <DateTimePicker
+              value={validUntil}
+              mode="datetime"
+              display="spinner"
+              onChange={(_, date) => {
+                if (date) setValidUntil(date);
+              }}
+            />
+            <Button title="완료" onPress={() => setShowTimePicker(false)} variant="outline" />
+          </>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Pressable style={styles.termsRow} onPress={() => setAgreedToTerms((v) => !v)}>
+          <Ionicons
+            name={agreedToTerms ? 'checkbox' : 'square-outline'}
+            size={20}
+            color={agreedToTerms ? colors.primary : colors.textSecondary}
+          />
+          <Text style={styles.termsText}>이용약관에 동의합니다</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/terms')}>
+          <Text style={styles.termsLink}>약관 보기</Text>
+        </Pressable>
+      </View>
+
+      <Button
+        title={submitting ? '등록 중...' : '등록하기'}
+        onPress={submit}
+        disabled={!canSubmit}
+        loading={submitting}
+      />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    gap: 12,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.md,
+    backgroundColor: colors.background,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
+  card: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    gap: spacing.sm,
+    ...shadow.card,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs / 2,
   },
   sectionTitle: {
-    fontWeight: '600',
-    marginTop: 8,
+    ...typography.subtitle,
+    fontSize: 14,
   },
   instructionLabel: {
-    fontWeight: '500',
-    fontSize: 13,
-    color: '#333',
-    marginTop: 4,
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginTop: spacing.xs,
   },
   helperText: {
-    color: '#555',
+    ...typography.caption,
   },
   errorText: {
-    color: '#c0392b',
+    color: colors.danger,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  feeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  feeText: {
+    ...typography.caption,
+    color: colors.primary,
     fontWeight: '600',
   },
   preview: {
     width: '100%',
     height: 200,
-    borderRadius: 8,
+    borderRadius: radius.md,
   },
   termsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-  },
-  checkbox: {
-    fontSize: 18,
+    gap: spacing.sm,
   },
   termsText: {
     fontSize: 14,
+    color: colors.textPrimary,
   },
   termsLink: {
-    color: '#2A5FD9',
+    color: colors.primary,
     fontSize: 13,
     textDecorationLine: 'underline',
-  },
-  submitRow: {
-    marginTop: 12,
   },
 });

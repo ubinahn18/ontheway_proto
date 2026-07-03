@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '../lib/AuthContext';
 import { SearchProvider } from '../lib/SearchContext';
 import { registerForPushNotificationsAsync } from '../lib/notifications';
 import { useItemNotifications } from '../lib/useItemNotifications';
+import { colors } from '../lib/theme';
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
@@ -39,7 +40,16 @@ function RootLayoutNav() {
   }, []);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.primary,
+        headerTitleStyle: { color: colors.textPrimary, fontWeight: '700' },
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen
         name="item/[id]"

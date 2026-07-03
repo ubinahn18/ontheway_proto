@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Button,
   Image,
+  Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
 import { useSearch, type Item } from '../../lib/SearchContext';
 import { statusLabel } from '../../lib/itemStatus';
 import { FUEL_EFFICIENCY_KM_PER_L, FUEL_PRICE_PER_L } from '../../lib/constants';
+import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
+import { Button } from '../../components/ui/Button';
+import { StatusBadge } from '../../components/ui/StatusBadge';
 
 type NaviResult = {
   directDurationSec: number;
@@ -110,6 +114,32 @@ export default function ItemDetailScreen() {
     }
   }
 
+  function openEtaPicker() {
+    if (Platform.OS === 'android') {
+      // Android has no combined "datetime" dialog — chain a date picker
+      // into a time picker and merge the two results.
+      DateTimePickerAndroid.open({
+        value: deliveryEta ?? new Date(),
+        mode: 'date',
+        onChange: (_, pickedDate) => {
+          if (!pickedDate) return;
+          DateTimePickerAndroid.open({
+            value: deliveryEta ?? new Date(),
+            mode: 'time',
+            onChange: (_, pickedTime) => {
+              if (!pickedTime) return;
+              const combined = new Date(pickedDate);
+              combined.setHours(pickedTime.getHours(), pickedTime.getMinutes());
+              setDeliveryEta(combined);
+            },
+          });
+        },
+      });
+    } else {
+      setShowEtaPicker(true);
+    }
+  }
+
   async function confirmDelivery() {
     if (!item) return;
     setConfirming(true);
@@ -128,7 +158,7 @@ export default function ItemDetailScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator />
+        <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
@@ -136,7 +166,8 @@ export default function ItemDetailScreen() {
   if (!item) {
     return (
       <View style={styles.center}>
-        <Text>아이템을 찾을 수 없어요</Text>
+        <Ionicons name="alert-circle-outline" size={32} color={colors.textSecondary} />
+        <Text style={styles.helperText}>아이템을 찾을 수 없어요</Text>
       </View>
     );
   }
@@ -150,83 +181,125 @@ export default function ItemDetailScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {item.photo_url && <Image source={{ uri: item.photo_url }} style={styles.photo} />}
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.price}>{item.price.toLocaleString()}원</Text>
-      {item.description && <Text>{item.description}</Text>}
-
-      <Text style={styles.sectionTitle}>픽업지</Text>
-      <Text>{item.pickup_address}</Text>
-      {item.pickup_instruction && (
-        <Text style={styles.helperText}>안내: {item.pickup_instruction}</Text>
-      )}
-      <Text style={styles.sectionTitle}>도착지</Text>
-      <Text>{item.dropoff_address}</Text>
-      {item.dropoff_instruction && (
-        <Text style={styles.helperText}>안내: {item.dropoff_instruction}</Text>
+      {item.photo_url ? (
+        <Image source={{ uri: item.photo_url }} style={styles.photo} />
+      ) : (
+        <View style={[styles.photo, styles.photoPlaceholder]}>
+          <Ionicons name="cube-outline" size={40} color={colors.textSecondary} />
+        </View>
       )}
 
-      <Text style={styles.sectionTitle}>마감 시각</Text>
-      <Text>{new Date(item.valid_until).toLocaleString()}</Text>
+      <View style={styles.headerCard}>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>{item.title}</Text>
+          <StatusBadge status={item.status} />
+        </View>
+        <Text style={styles.price}>{item.price.toLocaleString()}원</Text>
+        {item.description && <Text style={styles.description}>{item.description}</Text>}
+      </View>
 
-      {(item.status === 'selected' || item.status === 'delivered') && item.delivery_eta && (
-        <>
-          <Text style={styles.sectionTitle}>배달 예상 시각</Text>
-          <Text>{new Date(item.delivery_eta).toLocaleString()}</Text>
-        </>
-      )}
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="location" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>픽업지</Text>
+        </View>
+        <Text style={styles.bodyText}>{item.pickup_address}</Text>
+        {item.pickup_instruction && (
+          <Text style={styles.helperText}>안내: {item.pickup_instruction}</Text>
+        )}
 
-      <Text style={styles.sectionTitle}>경유 시 추가 소요 시간 · 비용 추정</Text>
-      {!origin || !destination ? (
-        <Text style={styles.helperText}>
-          둘러보기 탭에서 내 출발지/목적지를 먼저 설정해야 계산할 수 있어요
-        </Text>
-      ) : naviLoading ? (
-        <ActivityIndicator />
-      ) : naviError ? (
-        <Text style={styles.helperText}>{naviError}</Text>
-      ) : navi ? (
-        <>
-          <Text style={styles.diff}>+{navi.diffMinutes}분 더 소요</Text>
+        <View style={styles.divider} />
+
+        <View style={styles.sectionHeader}>
+          <Ionicons name="flag" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>도착지</Text>
+        </View>
+        <Text style={styles.bodyText}>{item.dropoff_address}</Text>
+        {item.dropoff_instruction && (
+          <Text style={styles.helperText}>안내: {item.dropoff_instruction}</Text>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="time" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>마감 시각</Text>
+        </View>
+        <Text style={styles.bodyText}>{new Date(item.valid_until).toLocaleString()}</Text>
+
+        {(item.status === 'selected' || item.status === 'delivered') && item.delivery_eta && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.sectionHeader}>
+              <Ionicons name="alarm" size={16} color={colors.primary} />
+              <Text style={styles.sectionTitle}>배달 예상 시각</Text>
+            </View>
+            <Text style={styles.bodyText}>{new Date(item.delivery_eta).toLocaleString()}</Text>
+          </>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="car" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>경유 시 추가 소요 시간 · 비용 추정</Text>
+        </View>
+        {!origin || !destination ? (
           <Text style={styles.helperText}>
-            추정 주유비: 약{' '}
-            {Math.max(
-              0,
-              Math.round(
-                (navi.extraDistanceMeters / 1000 / FUEL_EFFICIENCY_KM_PER_L) * FUEL_PRICE_PER_L
-              )
-            ).toLocaleString()}
-            원
+            둘러보기 탭에서 내 출발지/목적지를 먼저 설정해야 계산할 수 있어요
           </Text>
-          <Text style={styles.helperText}>
-            추정 도로비 차이: 약 {Math.max(0, navi.extraTollFare).toLocaleString()}원
-          </Text>
-        </>
-      ) : null}
+        ) : naviLoading ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : naviError ? (
+          <Text style={styles.helperText}>{naviError}</Text>
+        ) : navi ? (
+          <View style={styles.costBox}>
+            <Text style={styles.diff}>+{navi.diffMinutes}분 더 소요</Text>
+            <Text style={styles.costLine}>
+              추정 주유비: 약{' '}
+              {Math.max(
+                0,
+                Math.round(
+                  (navi.extraDistanceMeters / 1000 / FUEL_EFFICIENCY_KM_PER_L) * FUEL_PRICE_PER_L
+                )
+              ).toLocaleString()}
+              원
+            </Text>
+            <Text style={styles.costLine}>
+              추정 도로비 차이: 약 {Math.max(0, navi.extraTollFare).toLocaleString()}원
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
       {canSelect && (
-        <>
-          <Text style={styles.sectionTitle}>배달 예상 시각</Text>
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="alarm-outline" size={16} color={colors.primary} />
+            <Text style={styles.sectionTitle}>배달 예상 시각</Text>
+          </View>
           <Button
-            title={
-              deliveryEta ? deliveryEta.toLocaleString() : '배달 예상 시각 선택'
-            }
-            onPress={() => setShowEtaPicker(true)}
+            title={deliveryEta ? deliveryEta.toLocaleString() : '배달 예상 시각 선택'}
+            onPress={openEtaPicker}
+            variant="outline"
           />
-          {showEtaPicker && (
-            <DateTimePicker
-              value={deliveryEta ?? new Date()}
-              mode="datetime"
-              onChange={(_, date) => {
-                setShowEtaPicker(false);
-                if (date) setDeliveryEta(date);
-              }}
-            />
+          {Platform.OS === 'ios' && showEtaPicker && (
+            <>
+              <DateTimePicker
+                value={deliveryEta ?? new Date()}
+                mode="datetime"
+                display="spinner"
+                onChange={(_, date) => {
+                  if (date) setDeliveryEta(date);
+                }}
+              />
+              <Button title="완료" onPress={() => setShowEtaPicker(false)} />
+            </>
           )}
-        </>
+        </View>
       )}
 
-      <View style={styles.selectRow}>
+      <View style={styles.actions}>
         <Button
           title={
             isOwnItem
@@ -241,68 +314,115 @@ export default function ItemDetailScreen() {
           }
           onPress={select}
           disabled={!canSelect || selecting || !deliveryEta}
+          loading={selecting}
         />
+
+        {canMarkDelivered && (
+          <Button title="배송 완료" onPress={markDelivered} loading={delivering} />
+        )}
+
+        {canConfirmDelivery && (
+          <Button title="배송 확인" onPress={confirmDelivery} loading={confirming} />
+        )}
       </View>
-
-      {canMarkDelivered && (
-        <View style={styles.selectRow}>
-          <Button
-            title={delivering ? '처리 중...' : '배송 완료'}
-            onPress={markDelivered}
-            disabled={delivering}
-          />
-        </View>
-      )}
-
-      {canConfirmDelivery && (
-        <View style={styles.selectRow}>
-          <Button
-            title={confirming ? '처리 중...' : '배송 확인'}
-            onPress={confirmDelivery}
-            disabled={confirming}
-          />
-        </View>
-      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    gap: 8,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.md,
+    backgroundColor: colors.background,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
   },
   photo: {
     width: '100%',
     height: 220,
-    borderRadius: 8,
+    borderRadius: radius.lg,
+  },
+  photoPlaceholder: {
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCard: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    gap: spacing.xs,
+    ...shadow.card,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
+    ...typography.title,
+    flex: 1,
   },
   price: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.price,
+    color: colors.primary,
+    fontSize: 22,
+  },
+  description: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  card: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    gap: spacing.xs,
+    ...shadow.card,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs / 2,
   },
   sectionTitle: {
-    fontWeight: '600',
-    marginTop: 8,
+    ...typography.subtitle,
+    fontSize: 14,
+  },
+  bodyText: {
+    ...typography.body,
   },
   helperText: {
-    color: '#555',
+    ...typography.caption,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.md,
+  },
+  costBox: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.xs / 2,
   },
   diff: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#c0392b',
+    color: colors.primary,
   },
-  selectRow: {
-    marginTop: 16,
+  costLine: {
+    ...typography.caption,
+  },
+  actions: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
 });

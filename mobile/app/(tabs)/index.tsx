@@ -1,20 +1,15 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Button,
-  FlatList,
-  Image,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
 import { useSearch, type Item } from '../../lib/SearchContext';
+import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
+import { Button } from '../../components/ui/Button';
+import { TextField } from '../../components/ui/TextField';
+import { ItemCard } from '../../components/ItemCard';
 
 export default function BrowseScreen() {
   const router = useRouter();
@@ -107,107 +102,108 @@ export default function BrowseScreen() {
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View style={styles.filters}>
-          <Text style={styles.sectionTitle}>내 출발지</Text>
-          <Button
-            title={locating ? '위치 확인 중...' : '현재 위치 사용'}
-            onPress={useOriginCurrentLocation}
-            disabled={locating}
-          />
-          {origin && (
-            <Text style={styles.helperText}>
-              {origin.address} {origin.district ? `(${origin.district})` : ''}
-            </Text>
-          )}
+          <View style={styles.fieldGroup}>
+            <View style={styles.labelRow}>
+              <Ionicons name="navigate" size={16} color={colors.primary} />
+              <Text style={styles.sectionTitle}>내 출발지</Text>
+            </View>
+            <Button
+              title={locating ? '위치 확인 중...' : '현재 위치 사용'}
+              onPress={useOriginCurrentLocation}
+              disabled={locating}
+              variant="outline"
+            />
+            {origin && (
+              <Text style={styles.helperText}>
+                {origin.address} {origin.district ? `(${origin.district})` : ''}
+              </Text>
+            )}
+          </View>
 
-          <Text style={styles.sectionTitle}>내 목적지</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="목적지 주소 검색"
-            value={destQuery}
-            onChangeText={setDestQuery}
-          />
-          <Button
-            title={searchingDest ? '검색 중...' : '주소 검색'}
-            onPress={searchDestination}
-            disabled={searchingDest || !destQuery.trim()}
-          />
-          {destination && (
-            <Text style={styles.helperText}>
-              {destination.address} {destination.district ? `(${destination.district})` : ''}
-            </Text>
-          )}
+          <View style={styles.fieldGroup}>
+            <View style={styles.labelRow}>
+              <Ionicons name="flag" size={16} color={colors.primary} />
+              <Text style={styles.sectionTitle}>내 목적지</Text>
+            </View>
+            <TextField
+              placeholder="목적지 주소 검색"
+              value={destQuery}
+              onChangeText={setDestQuery}
+            />
+            <Button
+              title={searchingDest ? '검색 중...' : '주소 검색'}
+              onPress={searchDestination}
+              disabled={searchingDest || !destQuery.trim()}
+              variant="outline"
+            />
+            {destination && (
+              <Text style={styles.helperText}>
+                {destination.address} {destination.district ? `(${destination.district})` : ''}
+              </Text>
+            )}
+          </View>
 
-          <Text style={styles.sectionTitle}>반경 (km)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="반경 (km)"
-            value={radiusKm}
-            onChangeText={setRadiusKm}
-            keyboardType="number-pad"
-          />
+          <View style={styles.fieldGroup}>
+            <View style={styles.labelRow}>
+              <Ionicons name="locate" size={16} color={colors.primary} />
+              <Text style={styles.sectionTitle}>반경 (km)</Text>
+            </View>
+            <TextField
+              placeholder="반경 (km)"
+              value={radiusKm}
+              onChangeText={setRadiusKm}
+              keyboardType="number-pad"
+            />
+          </View>
 
           <Button title={searching ? '검색 중...' : '검색하기'} onPress={search} disabled={searching} />
-          {searching && <ActivityIndicator />}
+          {searching && <ActivityIndicator color={colors.primary} style={styles.spinner} />}
         </View>
       }
-      renderItem={({ item }) => (
-        <View style={styles.card} onTouchEnd={() => router.push(`/item/${item.id}`)}>
-          {item.photo_url && <Image source={{ uri: item.photo_url }} style={styles.thumb} />}
-          <View style={styles.cardBody}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text>{item.price.toLocaleString()}원</Text>
-            <Text style={styles.helperText}>
-              {item.pickup_district} → {item.dropoff_district}
-            </Text>
-          </View>
+      renderItem={({ item }) => <ItemCard item={item} onPress={() => router.push(`/item/${item.id}`)} />}
+      ListEmptyComponent={
+        <View style={styles.emptyState}>
+          <Ionicons name="search-outline" size={32} color={colors.textSecondary} />
+          <Text style={styles.helperText}>검색 결과가 없어요</Text>
         </View>
-      )}
-      ListEmptyComponent={<Text style={styles.helperText}>검색 결과가 없어요</Text>}
+      }
     />
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    gap: 12,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   filters: {
-    gap: 8,
-    marginBottom: 16,
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadow.card,
+  },
+  fieldGroup: {
+    gap: spacing.sm,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   sectionTitle: {
-    fontWeight: '600',
-    marginTop: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
+    ...typography.subtitle,
   },
   helperText: {
-    color: '#555',
+    ...typography.caption,
   },
-  card: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
-    borderRadius: 8,
-    marginBottom: 8,
+  spinner: {
+    marginTop: spacing.xs,
   },
-  thumb: {
-    width: 64,
-    height: 64,
-    borderRadius: 8,
-  },
-  cardBody: {
-    flex: 1,
-    gap: 2,
-  },
-  cardTitle: {
-    fontWeight: '600',
+  emptyState: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xxl,
   },
 });

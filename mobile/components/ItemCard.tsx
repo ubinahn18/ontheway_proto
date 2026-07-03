@@ -1,47 +1,91 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { Item } from '../lib/SearchContext';
-import { statusLabel } from '../lib/itemStatus';
+import { colors, radius, shadow, spacing, typography } from '../lib/theme';
+import { StatusBadge } from './ui/StatusBadge';
 
 export function ItemCard({ item, onPress }: { item: Item; onPress: () => void }) {
   return (
-    <View style={styles.card} onTouchEnd={onPress}>
-      {item.photo_url && <Image source={{ uri: item.photo_url }} style={styles.thumb} />}
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
+      {item.photo_url ? (
+        <Image source={{ uri: item.photo_url }} style={styles.thumb} />
+      ) : (
+        <View style={[styles.thumb, styles.thumbPlaceholder]}>
+          <Ionicons name="cube-outline" size={24} color={colors.textSecondary} />
+        </View>
+      )}
       <View style={styles.cardBody}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        <Text>
-          {item.price.toLocaleString()}원 · {statusLabel(item.status)}
-        </Text>
-        <Text style={styles.helperText}>
-          {item.pickup_district} → {item.dropoff_district}
-        </Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <StatusBadge status={item.status} />
+        </View>
+        <Text style={styles.price}>{item.price.toLocaleString()}원</Text>
+        <View style={styles.routeRow}>
+          <Text style={styles.routeText} numberOfLines={1}>
+            {item.pickup_district}
+          </Text>
+          <Ionicons name="arrow-forward" size={12} color={colors.textSecondary} />
+          <Text style={styles.routeText} numberOfLines={1}>
+            {item.dropoff_district}
+          </Text>
+        </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    gap: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
-    borderRadius: 8,
-    marginTop: 12,
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    marginTop: spacing.md,
+    ...shadow.card,
+  },
+  cardPressed: {
+    opacity: 0.85,
   },
   thumb: {
-    width: 64,
-    height: 64,
-    borderRadius: 8,
+    width: 72,
+    height: 72,
+    borderRadius: radius.md,
+  },
+  thumbPlaceholder: {
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardBody: {
     flex: 1,
-    gap: 2,
+    gap: spacing.xs,
+    justifyContent: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   cardTitle: {
-    fontWeight: '600',
+    ...typography.subtitle,
+    flex: 1,
   },
-  helperText: {
-    color: '#555',
+  price: {
+    ...typography.price,
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  routeText: {
+    ...typography.caption,
   },
 });

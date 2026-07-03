@@ -1,15 +1,10 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Button,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Image, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { signInWithKakao } from '../../lib/kakaoAuth';
+import { colors, spacing, typography } from '../../lib/theme';
+import { Button } from '../../components/ui/Button';
+import { TextField } from '../../components/ui/TextField';
 
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
@@ -52,31 +47,50 @@ export default function SignInScreen() {
     }
   }
 
+  const canSubmit = !submitting && !!email && !!password;
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>이메일로 로그인</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="이메일 주소"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="비밀번호 (6자 이상)"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-      <Button title="로그인" onPress={signIn} disabled={submitting || !email || !password} />
-      <Button title="처음이라면: 가입하기" onPress={signUp} disabled={submitting || !email || !password} />
+      <View style={styles.brand}>
+        <Image source={require('../../assets/icon.png')} style={styles.logo} />
+        <Text style={styles.appName}>OnTheWay</Text>
+        <Text style={styles.tagline}>가는 길에, 필요한 걸 전해주세요</Text>
+      </View>
 
-      <Text style={styles.divider}>또는</Text>
-      <Button title="카카오로 로그인" onPress={kakaoSignIn} disabled={submitting} />
+      <View style={styles.form}>
+        <TextField
+          label="이메일"
+          placeholder="이메일 주소"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextField
+          label="비밀번호"
+          placeholder="비밀번호 (6자 이상)"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+        <Button title="로그인" onPress={signIn} disabled={!canSubmit} />
+        <Button
+          title="처음이라면: 가입하기"
+          onPress={signUp}
+          disabled={!canSubmit}
+          variant="outline"
+        />
 
-      {submitting && <ActivityIndicator style={styles.spinner} />}
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>또는</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <Button title="카카오로 로그인" onPress={kakaoSignIn} disabled={submitting} variant="kakao" />
+
+        {submitting && <ActivityIndicator color={colors.primary} style={styles.spinner} />}
+      </View>
     </View>
   );
 }
@@ -85,26 +99,45 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
-    padding: 24,
-    gap: 12,
+    padding: spacing.xxl,
+    gap: spacing.xxl,
+    backgroundColor: colors.background,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 8,
+  brand: {
+    alignItems: 'center',
+    gap: spacing.xs,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
+  logo: {
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    marginBottom: spacing.sm,
+  },
+  appName: {
+    ...typography.title,
+    fontSize: 26,
+  },
+  tagline: {
+    ...typography.caption,
+  },
+  form: {
+    gap: spacing.md,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    ...typography.caption,
   },
   spinner: {
-    marginTop: 8,
-  },
-  divider: {
-    textAlign: 'center',
-    color: '#999',
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
 });

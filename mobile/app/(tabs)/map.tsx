@@ -1,7 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import { useSearch } from '../../lib/SearchContext';
+import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
 
 export default function MapScreen() {
   const router = useRouter();
@@ -10,7 +12,10 @@ export default function MapScreen() {
   if (!origin || !destination) {
     return (
       <View style={styles.container}>
-        <Text>둘러보기 탭에서 출발지/목적지를 먼저 설정해주세요</Text>
+        <View style={styles.emptyCard}>
+          <Ionicons name="map-outline" size={32} color={colors.textSecondary} />
+          <Text style={styles.emptyText}>둘러보기 탭에서{'\n'}출발지/목적지를 먼저 설정해주세요</Text>
+        </View>
       </View>
     );
   }
@@ -63,7 +68,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: spacing.xxl,
+    backgroundColor: colors.background,
+  },
+  emptyCard: {
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.xxl,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadow.card,
+  },
+  emptyText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   map: {
     flex: 1,
