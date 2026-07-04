@@ -1,33 +1,33 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
-import { useSearch, type Item } from '../../lib/SearchContext';
+import { useSearch } from '../../lib/SearchContext';
+import { searchItemsAlongRoute } from '../../lib/routeSearch';
 import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
 import { Button } from '../../components/ui/Button';
 import { TextField } from '../../components/ui/TextField';
+import { Chip } from '../../components/ui/Chip';
 import { ItemCard } from '../../components/ItemCard';
+
+const DETOUR_FILTERS = [15, 30, 45] as const;
 
 export default function BrowseScreen() {
   const router = useRouter();
-  const {
-    origin,
-    setOrigin,
-    destination,
-    setDestination,
-    radiusKm,
-    setRadiusKm,
-    results,
-    setResults,
-  } = useSearch();
+  const { origin, setOrigin, destination, setDestination, results, setResults } = useSearch();
 
   const [destQuery, setDestQuery] = useState('');
   const [locating, setLocating] = useState(false);
   const [searchingDest, setSearchingDest] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [maxDetourMinutes, setMaxDetourMinutes] = useState<number>(15);
+
+  const filteredResults = useMemo(
+    () => results.filter((item) => item.detourMinutes <= maxDetourMinutes),
+    [results, maxDetourMinutes]
+  );
 
   async function useOriginCurrentLocation() {
     setLocating(true);
@@ -77,17 +77,8 @@ export default function BrowseScreen() {
     }
     setSearching(true);
     try {
-      const radiusMeters = (Number(radiusKm) || 3) * 1000;
-      const { data, error } = await supabase.rpc('items_matching_route', {
-        seeker_origin_lng: origin.lng,
-        seeker_origin_lat: origin.lat,
-        seeker_dest_lng: destination.lng,
-        seeker_dest_lat: destination.lat,
-        origin_radius_meters: radiusMeters,
-        dest_radius_meters: radiusMeters,
-      });
-      if (error) throw error;
-      setResults((data as Item[]).sort((a, b) => b.price - a.price));
+      const candidates = await searchItemsAlongRoute(origin, destination);
+      setResults(candidates);
     } catch (e) {
       Alert.alert('검색 실패', e instanceof Error ? e.message : String(e));
     } finally {
@@ -98,7 +89,7 @@ export default function BrowseScreen() {
   return (
     <FlatList
       contentContainerStyle={styles.container}
-      data={results}
+      data={filteredResults}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View style={styles.filters}>
@@ -145,26 +136,39 @@ export default function BrowseScreen() {
 
           <View style={styles.fieldGroup}>
             <View style={styles.labelRow}>
-              <Ionicons name="locate" size={16} color={colors.primary} />
-              <Text style={styles.sectionTitle}>반경 (km)</Text>
+              <Ionicons name="time" size={16} color={colors.primary} />
+              <Text style={styles.sectionTitle}>추가 소요시간</Text>
             </View>
-            <TextField
-              placeholder="반경 (km)"
-              value={radiusKm}
-              onChangeText={setRadiusKm}
-              keyboardType="number-pad"
-            />
+            <View style={styles.chipRow}>
+              {DETOUR_FILTERS.map((minutes) => (
+                <Chip
+                  key={minutes}
+                  label={`${minutes}분 이내`}
+                  selected={maxDetourMinutes === minutes}
+                  onPress={() => setMaxDetourMinutes(minutes)}
+                />
+              ))}
+            </View>
           </View>
 
           <Button title={searching ? '검색 중...' : '검색하기'} onPress={search} disabled={searching} />
           {searching && <ActivityIndicator color={colors.primary} style={styles.spinner} />}
         </View>
       }
-      renderItem={({ item }) => <ItemCard item={item} onPress={() => router.push(`/item/${item.id}`)} />}
+      renderItem={({ item }) => (
+        <ItemCard
+          item={item}
+          onPress={() => router.push(`/item/${item.id}`)}
+          detourMinutes={item.detourMinutes}
+          extraTollFare={item.extraTollFare}
+        />
+      )}
       ListEmptyComponent={
         <View style={styles.emptyState}>
           <Ionicons name="search-outline" size={32} color={colors.textSecondary} />
-          <Text style={styles.helperText}>검색 결과가 없어요</Text>
+          <Text style={styles.helperText}>
+            {results.length > 0 ? '선택한 시간 안에는 결과가 없어요' : '검색 결과가 없어요'}
+          </Text>
         </View>
       }
     />
@@ -194,6 +198,11 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.subtitle,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   helperText: {
     ...typography.caption,

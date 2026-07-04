@@ -30,14 +30,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="my-items"
         options={{
-          title: '내 아이템',
+          title: '내 배송',
           tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="my-selections"
         options={{
-          title: '내 선택',
+          title: '내 페이지',
           tabBarIcon: ({ color, size }) => <Ionicons name="bag-check" size={size} color={color} />,
         }}
       />

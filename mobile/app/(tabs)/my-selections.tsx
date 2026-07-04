@@ -6,11 +6,15 @@ import { supabase } from '../../lib/supabase';
 import type { Item } from '../../lib/SearchContext';
 import { ItemCard } from '../../components/ItemCard';
 import { Button } from '../../components/ui/Button';
-import { colors, spacing, typography } from '../../lib/theme';
+import { StarRating } from '../../components/ui/StarRating';
+import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
+
+type MyRating = { average: number; count: number };
 
 export default function MySelectionsScreen() {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
+  const [rating, setRating] = useState<MyRating | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -29,6 +33,14 @@ export default function MySelectionsScreen() {
           .in('status', ['selected', 'delivered'])
           .order('selected_at', { ascending: false });
         if (!cancelled) setItems((data as Item[]) ?? []);
+
+        const { data: ratingData } = await supabase.rpc('get_my_rating');
+        if (!cancelled && ratingData?.[0]) {
+          setRating({
+            average: Number(ratingData[0].average) || 0,
+            count: Number(ratingData[0].rating_count) || 0,
+          });
+        }
       })();
       return () => {
         cancelled = true;
@@ -43,6 +55,14 @@ export default function MySelectionsScreen() {
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View style={styles.header}>
+          <View style={styles.ratingCard}>
+            <StarRating value={rating?.average ?? 0} readonly size={22} />
+            <Text style={styles.ratingText}>
+              {rating && rating.count > 0
+                ? `${rating.average.toFixed(1)} (${rating.count}개 평점)`
+                : '아직 받은 평점이 없어요'}
+            </Text>
+          </View>
           <Button title="배송 이력 보기" onPress={() => router.push('/history/deliveries')} />
           <Button title="약관 보기" onPress={() => router.push('/terms')} variant="outline" />
           <Button title="로그아웃" onPress={() => supabase.auth.signOut()} variant="ghost" />
@@ -68,6 +88,19 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: spacing.sm,
+  },
+  ratingCard: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.sm,
+    ...shadow.card,
+  },
+  ratingText: {
+    ...typography.subtitle,
+    fontSize: 14,
   },
   helperText: {
     ...typography.caption,

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -11,13 +10,12 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { File } from 'expo-file-system';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
+import { uploadItemPhoto } from '../../lib/uploadPhoto';
 import type { Place } from '../../lib/SearchContext';
 import { InstructionPicker } from '../../components/InstructionPicker';
 import { MAX_ITEM_PRICE } from '../../lib/constants';
@@ -25,6 +23,7 @@ import { calcPlatformFee } from '../../lib/fee';
 import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
 import { Button } from '../../components/ui/Button';
 import { TextField } from '../../components/ui/TextField';
+import { PhotoPicker } from '../../components/ui/PhotoPicker';
 
 export default function NewItemScreen() {
   const router = useRouter();
@@ -47,12 +46,15 @@ export default function NewItemScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [validUntil, setValidUntil] = useState(new Date(Date.now() + 60 * 60 * 1000));
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [deliveryDeadline, setDeliveryDeadline] = useState(new Date(Date.now() + 3 * 60 * 60 * 1000));
+  const [showDeliveryDeadlinePicker, setShowDeliveryDeadlinePicker] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const priceNumber = Number(price) || 0;
   const exceedsMaxPrice = priceNumber > MAX_ITEM_PRICE;
   const platformFee = calcPlatformFee(priceNumber);
+  const deadlineOrderInvalid = deliveryDeadline <= validUntil;
 
   async function usePickupCurrentLocation() {
     setLocating(true);
@@ -103,21 +105,6 @@ export default function NewItemScreen() {
     }
   }
 
-  async function pickPhoto() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('사진 접근 권한이 필요해요');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-    });
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
-    }
-  }
-
   function openValidUntilPicker() {
     if (Platform.OS === 'android') {
       // Android has no combined "datetime" dialog — chain a date picker
@@ -144,6 +131,30 @@ export default function NewItemScreen() {
     }
   }
 
+  function openDeliveryDeadlinePicker() {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: deliveryDeadline,
+        mode: 'date',
+        onChange: (_, pickedDate) => {
+          if (!pickedDate) return;
+          DateTimePickerAndroid.open({
+            value: deliveryDeadline,
+            mode: 'time',
+            onChange: (_, pickedTime) => {
+              if (!pickedTime) return;
+              const combined = new Date(pickedDate);
+              combined.setHours(pickedTime.getHours(), pickedTime.getMinutes());
+              setDeliveryDeadline(combined);
+            },
+          });
+        },
+      });
+    } else {
+      setShowDeliveryDeadlinePicker(true);
+    }
+  }
+
   async function submit() {
     if (!title || !price || !pickup || !dropoff || !photoUri) {
       Alert.alert('제목, 가격, 사진, 픽업지, 도착지를 모두 입력해주세요');
@@ -151,6 +162,10 @@ export default function NewItemScreen() {
     }
     if (exceedsMaxPrice) {
       Alert.alert('가격 상한 초과', `가격은 최대 ${MAX_ITEM_PRICE.toLocaleString()}원까지 등록할 수 있어요`);
+      return;
+    }
+    if (deadlineOrderInvalid) {
+      Alert.alert('배송완료 마감 시각은 픽업 마감 시각보다 늦어야 해요');
       return;
     }
     if (!agreedToTerms) {
@@ -165,19 +180,7 @@ export default function NewItemScreen() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error('로그인이 필요해요');
 
-      const fileExt = (photoUri.split('.').pop() ?? 'jpg').toLowerCase();
-      const filePath = `${user.id}/${Date.now()}.${fileExt}`;
-      const contentType = fileExt === 'png' ? 'image/png' : fileExt === 'heic' ? 'image/heic' : 'image/jpeg';
-      const arrayBuffer = await new File(photoUri).arrayBuffer();
-
-      const { error: uploadError } = await supabase.storage
-        .from('item-photos')
-        .upload(filePath, arrayBuffer, { contentType });
-      if (uploadError) throw uploadError;
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('item-photos').getPublicUrl(filePath);
+      const publicUrl = await uploadItemPhoto(user.id, photoUri, 'item');
 
       const { error: insertError } = await supabase.rpc('insert_item', {
         p_title: title,
@@ -195,6 +198,7 @@ export default function NewItemScreen() {
         p_dropoff_lat: dropoff.lat,
         p_dropoff_instruction: dropoffInstruction || null,
         p_valid_until: validUntil.toISOString(),
+        p_delivery_deadline: deliveryDeadline.toISOString(),
       });
       if (insertError) throw insertError;
 
@@ -206,7 +210,7 @@ export default function NewItemScreen() {
     }
   }
 
-  const canSubmit = !exceedsMaxPrice && agreedToTerms && !submitting;
+  const canSubmit = !exceedsMaxPrice && !deadlineOrderInvalid && agreedToTerms && !submitting;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -300,17 +304,17 @@ export default function NewItemScreen() {
           <Ionicons name="image" size={16} color={colors.primary} />
           <Text style={styles.sectionTitle}>사진</Text>
         </View>
-        <Button title="사진 선택" onPress={pickPhoto} variant="outline" />
-        {photoUri && <Image source={{ uri: photoUri }} style={styles.preview} />}
+        <PhotoPicker uri={photoUri} onChange={setPhotoUri} />
       </View>
 
       <View style={styles.card}>
         <View style={styles.sectionHeader}>
           <Ionicons name="time" size={16} color={colors.primary} />
-          <Text style={styles.sectionTitle}>마감 시각</Text>
+          <Text style={styles.sectionTitle}>픽업 마감 시각</Text>
         </View>
-        <Text style={styles.helperText}>{validUntil.toLocaleString()}</Text>
-        <Button title="마감 시각 변경" onPress={openValidUntilPicker} variant="outline" />
+        <Text style={styles.helperText}>이 시각까지 픽업되지 않으면 마감돼요</Text>
+        <Text style={styles.deadlineValue}>{validUntil.toLocaleString()}</Text>
+        <Button title="픽업 마감 시각 변경" onPress={openValidUntilPicker} variant="outline" />
         {Platform.OS === 'ios' && showTimePicker && (
           <>
             <DateTimePicker
@@ -322,6 +326,32 @@ export default function NewItemScreen() {
               }}
             />
             <Button title="완료" onPress={() => setShowTimePicker(false)} variant="outline" />
+          </>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="checkmark-done" size={16} color={colors.primary} />
+          <Text style={styles.sectionTitle}>배송완료 마감 시각</Text>
+        </View>
+        <Text style={styles.helperText}>이 시각까지 배송이 완료돼야 해요</Text>
+        <Text style={styles.deadlineValue}>{deliveryDeadline.toLocaleString()}</Text>
+        <Button title="배송완료 마감 시각 변경" onPress={openDeliveryDeadlinePicker} variant="outline" />
+        {deadlineOrderInvalid && (
+          <Text style={styles.errorText}>픽업 마감 시각보다 늦어야 해요</Text>
+        )}
+        {Platform.OS === 'ios' && showDeliveryDeadlinePicker && (
+          <>
+            <DateTimePicker
+              value={deliveryDeadline}
+              mode="datetime"
+              display="spinner"
+              onChange={(_, date) => {
+                if (date) setDeliveryDeadline(date);
+              }}
+            />
+            <Button title="완료" onPress={() => setShowDeliveryDeadlinePicker(false)} variant="outline" />
           </>
         )}
       </View>
@@ -383,6 +413,10 @@ const styles = StyleSheet.create({
   helperText: {
     ...typography.caption,
   },
+  deadlineValue: {
+    ...typography.body,
+    fontWeight: '600',
+  },
   errorText: {
     color: colors.danger,
     fontWeight: '600',
@@ -400,11 +434,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.primary,
     fontWeight: '600',
-  },
-  preview: {
-    width: '100%',
-    height: 200,
-    borderRadius: radius.md,
   },
   termsRow: {
     flexDirection: 'row',

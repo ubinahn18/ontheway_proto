@@ -14,12 +14,15 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
+import { uploadItemPhoto } from '../../lib/uploadPhoto';
 import { useSearch, type Item } from '../../lib/SearchContext';
 import { statusLabel } from '../../lib/itemStatus';
 import { FUEL_EFFICIENCY_KM_PER_L, FUEL_PRICE_PER_L } from '../../lib/constants';
 import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
 import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { PhotoPicker } from '../../components/ui/PhotoPicker';
+import { StarRating } from '../../components/ui/StarRating';
 
 type NaviResult = {
   directDurationSec: number;
@@ -43,8 +46,12 @@ export default function ItemDetailScreen() {
   const [delivering, setDelivering] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [pickupEta, setPickupEta] = useState<Date | null>(null);
+  const [showPickupEtaPicker, setShowPickupEtaPicker] = useState(false);
   const [deliveryEta, setDeliveryEta] = useState<Date | null>(null);
   const [showEtaPicker, setShowEtaPicker] = useState(false);
+  const [deliveryPhotoUri, setDeliveryPhotoUri] = useState<string | null>(null);
+  const [rating, setRating] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -79,14 +86,19 @@ export default function ItemDetailScreen() {
 
   async function select() {
     if (!item) return;
-    if (!deliveryEta) {
-      Alert.alert('배달 예상시각을 선택해주세요');
+    if (!pickupEta || !deliveryEta) {
+      Alert.alert('픽업 시간과 배달 예상시각을 모두 선택해주세요');
+      return;
+    }
+    if (pickupEta >= deliveryEta) {
+      Alert.alert('픽업 시간은 배달 예상시각보다 빨라야 해요');
       return;
     }
     setSelecting(true);
     try {
       const { error } = await supabase.rpc('select_item', {
         p_item_id: item.id,
+        p_pickup_eta: pickupEta.toISOString(),
         p_delivery_eta: deliveryEta.toISOString(),
       });
       if (error) throw error;
@@ -100,10 +112,18 @@ export default function ItemDetailScreen() {
   }
 
   async function markDelivered() {
-    if (!item) return;
+    if (!item || !currentUserId) return;
+    if (!deliveryPhotoUri) {
+      Alert.alert('배송완료 사진을 올려주세요');
+      return;
+    }
     setDelivering(true);
     try {
-      const { error } = await supabase.rpc('mark_delivered', { p_item_id: item.id });
+      const photoUrl = await uploadItemPhoto(currentUserId, deliveryPhotoUri, 'delivery');
+      const { error } = await supabase.rpc('mark_delivered', {
+        p_item_id: item.id,
+        p_delivery_photo_url: photoUrl,
+      });
       if (error) throw error;
       Alert.alert('배송 완료 처리했어요', '업로더에게 알림이 전송됐어요');
       router.back();
@@ -111,6 +131,30 @@ export default function ItemDetailScreen() {
       Alert.alert('처리 실패', e instanceof Error ? e.message : String(e));
     } finally {
       setDelivering(false);
+    }
+  }
+
+  function openPickupEtaPicker() {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: pickupEta ?? new Date(),
+        mode: 'date',
+        onChange: (_, pickedDate) => {
+          if (!pickedDate) return;
+          DateTimePickerAndroid.open({
+            value: pickupEta ?? new Date(),
+            mode: 'time',
+            onChange: (_, pickedTime) => {
+              if (!pickedTime) return;
+              const combined = new Date(pickedDate);
+              combined.setHours(pickedTime.getHours(), pickedTime.getMinutes());
+              setPickupEta(combined);
+            },
+          });
+        },
+      });
+    } else {
+      setShowPickupEtaPicker(true);
     }
   }
 
@@ -142,9 +186,16 @@ export default function ItemDetailScreen() {
 
   async function confirmDelivery() {
     if (!item) return;
+    if (rating === 0) {
+      Alert.alert('배송한 분에게 별점을 남겨주세요');
+      return;
+    }
     setConfirming(true);
     try {
-      const { error } = await supabase.rpc('confirm_delivery', { p_item_id: item.id });
+      const { error } = await supabase.rpc('confirm_delivery', {
+        p_item_id: item.id,
+        p_rating: rating,
+      });
       if (error) throw error;
       Alert.alert('배송을 확인했어요', '거래가 완료됐어요');
       router.back();
@@ -223,9 +274,31 @@ export default function ItemDetailScreen() {
       <View style={styles.card}>
         <View style={styles.sectionHeader}>
           <Ionicons name="time" size={16} color={colors.primary} />
-          <Text style={styles.sectionTitle}>마감 시각</Text>
+          <Text style={styles.sectionTitle}>픽업 마감 시각</Text>
         </View>
         <Text style={styles.bodyText}>{new Date(item.valid_until).toLocaleString()}</Text>
+
+        {item.delivery_deadline && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.sectionHeader}>
+              <Ionicons name="checkmark-done" size={16} color={colors.primary} />
+              <Text style={styles.sectionTitle}>배송완료 마감 시각</Text>
+            </View>
+            <Text style={styles.bodyText}>{new Date(item.delivery_deadline).toLocaleString()}</Text>
+          </>
+        )}
+
+        {(item.status === 'selected' || item.status === 'delivered') && item.pickup_eta && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.sectionHeader}>
+              <Ionicons name="navigate" size={16} color={colors.primary} />
+              <Text style={styles.sectionTitle}>픽업 예정 시각</Text>
+            </View>
+            <Text style={styles.bodyText}>{new Date(item.pickup_eta).toLocaleString()}</Text>
+          </>
+        )}
 
         {(item.status === 'selected' || item.status === 'delivered') && item.delivery_eta && (
           <>
@@ -275,6 +348,31 @@ export default function ItemDetailScreen() {
       {canSelect && (
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
+            <Ionicons name="navigate-outline" size={16} color={colors.primary} />
+            <Text style={styles.sectionTitle}>픽업 예정 시각</Text>
+          </View>
+          <Button
+            title={pickupEta ? pickupEta.toLocaleString() : '픽업 예정 시각 선택'}
+            onPress={openPickupEtaPicker}
+            variant="outline"
+          />
+          {Platform.OS === 'ios' && showPickupEtaPicker && (
+            <>
+              <DateTimePicker
+                value={pickupEta ?? new Date()}
+                mode="datetime"
+                display="spinner"
+                onChange={(_, date) => {
+                  if (date) setPickupEta(date);
+                }}
+              />
+              <Button title="완료" onPress={() => setShowPickupEtaPicker(false)} variant="outline" />
+            </>
+          )}
+
+          <View style={styles.divider} />
+
+          <View style={styles.sectionHeader}>
             <Ionicons name="alarm-outline" size={16} color={colors.primary} />
             <Text style={styles.sectionTitle}>배달 예상 시각</Text>
           </View>
@@ -299,6 +397,29 @@ export default function ItemDetailScreen() {
         </View>
       )}
 
+      {canMarkDelivered && (
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="camera" size={16} color={colors.primary} />
+            <Text style={styles.sectionTitle}>배송완료 사진</Text>
+          </View>
+          <PhotoPicker uri={deliveryPhotoUri} onChange={setDeliveryPhotoUri} />
+        </View>
+      )}
+
+      {canConfirmDelivery && (
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="star" size={16} color={colors.primary} />
+            <Text style={styles.sectionTitle}>배송한 분에게 별점 남기기</Text>
+          </View>
+          {item.delivery_photo_url && (
+            <Image source={{ uri: item.delivery_photo_url }} style={styles.deliveryPhoto} />
+          )}
+          <StarRating value={rating} onChange={setRating} size={32} />
+        </View>
+      )}
+
       <View style={styles.actions}>
         <Button
           title={
@@ -313,16 +434,26 @@ export default function ItemDetailScreen() {
                     : '선택하기'
           }
           onPress={select}
-          disabled={!canSelect || selecting || !deliveryEta}
+          disabled={!canSelect || selecting || !pickupEta || !deliveryEta}
           loading={selecting}
         />
 
         {canMarkDelivered && (
-          <Button title="배송 완료" onPress={markDelivered} loading={delivering} />
+          <Button
+            title="배송 완료"
+            onPress={markDelivered}
+            disabled={!deliveryPhotoUri}
+            loading={delivering}
+          />
         )}
 
         {canConfirmDelivery && (
-          <Button title="배송 확인" onPress={confirmDelivery} loading={confirming} />
+          <Button
+            title="배송 확인"
+            onPress={confirmDelivery}
+            disabled={rating === 0}
+            loading={confirming}
+          />
         )}
       </View>
     </ScrollView>
@@ -352,6 +483,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  deliveryPhoto: {
+    width: '100%',
+    height: 160,
+    borderRadius: radius.md,
   },
   headerCard: {
     padding: spacing.lg,

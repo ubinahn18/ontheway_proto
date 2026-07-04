@@ -4,7 +4,17 @@ import type { Item } from '../lib/SearchContext';
 import { colors, radius, shadow, spacing, typography } from '../lib/theme';
 import { StatusBadge } from './ui/StatusBadge';
 
-export function ItemCard({ item, onPress }: { item: Item; onPress: () => void }) {
+export function ItemCard({
+  item,
+  onPress,
+  detourMinutes,
+  extraTollFare,
+}: {
+  item: Item;
+  onPress: () => void;
+  detourMinutes?: number;
+  extraTollFare?: number;
+}) {
   return (
     <Pressable
       onPress={onPress}
@@ -34,6 +44,16 @@ export function ItemCard({ item, onPress }: { item: Item; onPress: () => void })
             {item.dropoff_district}
           </Text>
         </View>
+        {typeof detourMinutes === 'number' && (
+          <View style={styles.detourRow}>
+            <Ionicons name="time-outline" size={12} color={colors.primary} />
+            <Text style={styles.detourText}>
+              +{detourMinutes}분{typeof extraTollFare === 'number' && extraTollFare > 0
+                ? ` · 톨비 ${extraTollFare.toLocaleString()}원`
+                : ''}
+            </Text>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -87,5 +107,16 @@ const styles = StyleSheet.create({
   },
   routeText: {
     ...typography.caption,
+  },
+  detourRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs / 2,
+  },
+  detourText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
   },
 });

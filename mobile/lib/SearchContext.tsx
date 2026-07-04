@@ -31,12 +31,20 @@ export type Item = {
   dropoff_lat: number;
   dropoff_instruction: string | null;
   valid_until: string;
+  delivery_deadline: string | null;
   status: string;
   uploader_id: string;
   selected_by: string | null;
+  pickup_eta: string | null;
   delivery_eta: string | null;
+  delivery_photo_url: string | null;
   delivered_at: string | null;
   completed_at: string | null;
+};
+
+export type RouteCandidate = Item & {
+  detourMinutes: number;
+  extraTollFare: number;
 };
 
 type SearchContextValue = {
@@ -44,10 +52,8 @@ type SearchContextValue = {
   setOrigin: Dispatch<SetStateAction<Place | null>>;
   destination: Place | null;
   setDestination: Dispatch<SetStateAction<Place | null>>;
-  radiusKm: string;
-  setRadiusKm: Dispatch<SetStateAction<string>>;
-  results: Item[];
-  setResults: Dispatch<SetStateAction<Item[]>>;
+  results: RouteCandidate[];
+  setResults: Dispatch<SetStateAction<RouteCandidate[]>>;
 };
 
 const SearchContext = createContext<SearchContextValue | null>(null);
@@ -55,8 +61,7 @@ const SearchContext = createContext<SearchContextValue | null>(null);
 export function SearchProvider({ children }: PropsWithChildren) {
   const [origin, setOrigin] = useState<Place | null>(null);
   const [destination, setDestination] = useState<Place | null>(null);
-  const [radiusKm, setRadiusKm] = useState('3');
-  const [results, setResults] = useState<Item[]>([]);
+  const [results, setResults] = useState<RouteCandidate[]>([]);
 
   return (
     <SearchContext.Provider
@@ -65,8 +70,6 @@ export function SearchProvider({ children }: PropsWithChildren) {
         setOrigin,
         destination,
         setDestination,
-        radiusKm,
-        setRadiusKm,
         results,
         setResults,
       }}

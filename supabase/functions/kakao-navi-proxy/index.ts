@@ -5,8 +5,19 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const { originLng, originLat, destLng, destLat, pickupLng, pickupLat, dropoffLng, dropoffLat } =
-    await req.json();
+  const {
+    originLng,
+    originLat,
+    destLng,
+    destLat,
+    pickupLng,
+    pickupLat,
+    dropoffLng,
+    dropoffLat,
+    directDurationSec: providedDirectDurationSec,
+    directDistanceMeters: providedDirectDistanceMeters,
+    directTollFare: providedDirectTollFare,
+  } = await req.json();
 
   const coords = { originLng, originLat, destLng, destLat, pickupLng, pickupLat, dropoffLng, dropoffLat };
   if (Object.values(coords).some((v) => typeof v !== 'number')) {
@@ -16,12 +27,20 @@ Deno.serve(async (req) => {
     });
   }
 
+  // the direct (origin -> destination) leg is identical for every item in a
+  // given search, so callers comparing many items should compute it once
+  // (kakao-direct-route) and pass it in here instead of re-fetching it.
+  const hasProvidedDirect =
+    typeof providedDirectDurationSec === 'number' && typeof providedDirectDistanceMeters === 'number';
+
   const authHeader = { Authorization: `KakaoAK ${Deno.env.get('KAKAO_REST_API_KEY')}` };
 
-  const directReq = fetch(
-    `https://apis-navi.kakaomobility.com/v1/directions?origin=${originLng},${originLat}&destination=${destLng},${destLat}`,
-    { headers: authHeader }
-  );
+  const directReq = hasProvidedDirect
+    ? Promise.resolve(null)
+    : fetch(
+        `https://apis-navi.kakaomobility.com/v1/directions?origin=${originLng},${originLat}&destination=${destLng},${destLat}`,
+        { headers: authHeader }
+      );
 
   const viaReq = fetch('https://apis-navi.kakaomobility.com/v1/waypoints/directions', {
     method: 'POST',
@@ -40,22 +59,28 @@ Deno.serve(async (req) => {
 
   const [directRes, viaRes] = await Promise.all([directReq, viaReq]);
 
-  if (!directRes.ok || !viaRes.ok) {
-    const body = await (directRes.ok ? viaRes : directRes).text();
+  if ((directRes && !directRes.ok) || !viaRes.ok) {
+    const body = await (viaRes.ok ? directRes!.text() : viaRes.text());
     return new Response(JSON.stringify({ error: 'kakao navi api error', body }), {
       status: 502,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
-  const directData = await directRes.json();
   const viaData = await viaRes.json();
+  const directData = directRes ? await directRes.json() : null;
 
-  const directDurationSec = directData.routes?.[0]?.summary?.duration;
+  const directDurationSec = hasProvidedDirect
+    ? providedDirectDurationSec
+    : directData.routes?.[0]?.summary?.duration;
   const viaDurationSec = viaData.routes?.[0]?.summary?.duration;
-  const directDistanceMeters = directData.routes?.[0]?.summary?.distance;
+  const directDistanceMeters = hasProvidedDirect
+    ? providedDirectDistanceMeters
+    : directData.routes?.[0]?.summary?.distance;
   const viaDistanceMeters = viaData.routes?.[0]?.summary?.distance;
-  const directTollFare = directData.routes?.[0]?.summary?.fare?.toll ?? 0;
+  const directTollFare = hasProvidedDirect
+    ? (providedDirectTollFare ?? 0)
+    : (directData.routes?.[0]?.summary?.fare?.toll ?? 0);
   const viaTollFare = viaData.routes?.[0]?.summary?.fare?.toll ?? 0;
 
   if (
