@@ -18,8 +18,9 @@ import { callFunction } from '../../lib/kakaoFunctions';
 import { uploadItemPhoto } from '../../lib/uploadPhoto';
 import type { Place } from '../../lib/SearchContext';
 import { InstructionPicker } from '../../components/InstructionPicker';
-import { MAX_ITEM_PRICE } from '../../lib/constants';
+import { MAX_ITEM_PRICE, PICKUP_INSTRUCTION_PRESETS, DROPOFF_INSTRUCTION_PRESETS } from '../../lib/constants';
 import { calcPlatformFee } from '../../lib/fee';
+import { formatDateTime } from '../../lib/formatDateTime';
 import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
 import { Button } from '../../components/ui/Button';
 import { TextField } from '../../components/ui/TextField';
@@ -165,7 +166,7 @@ export default function NewItemScreen() {
       return;
     }
     if (deadlineOrderInvalid) {
-      Alert.alert('배송완료 마감 시각은 픽업 마감 시각보다 늦어야 해요');
+      Alert.alert('배송완료 마감 시각은 선택 마감 시각보다 늦어야 해요');
       return;
     }
     if (!agreedToTerms) {
@@ -228,15 +229,15 @@ export default function NewItemScreen() {
           multiline
         />
         <TextField
-          label="가격 (원)"
-          placeholder="가격 (원)"
+          label="배송 제안 가격 (원)"
+          placeholder="배송 제안 가격 (원)"
           value={price}
           onChangeText={setPrice}
           keyboardType="number-pad"
         />
         {exceedsMaxPrice ? (
           <Text style={styles.errorText}>
-            가격은 최대 {MAX_ITEM_PRICE.toLocaleString()}원까지 등록할 수 있어요
+            배송 제안 가격은 최대 {MAX_ITEM_PRICE.toLocaleString()}원까지 등록할 수 있어요
           </Text>
         ) : (
           priceNumber > 0 && (
@@ -274,7 +275,11 @@ export default function NewItemScreen() {
           </Text>
         )}
         <Text style={styles.instructionLabel}>픽업 방법 안내</Text>
-        <InstructionPicker value={pickupInstruction} onChange={setPickupInstruction} />
+        <InstructionPicker
+          presets={PICKUP_INSTRUCTION_PRESETS}
+          value={pickupInstruction}
+          onChange={setPickupInstruction}
+        />
       </View>
 
       <View style={styles.card}>
@@ -296,7 +301,11 @@ export default function NewItemScreen() {
           </Text>
         )}
         <Text style={styles.instructionLabel}>드랍 방법 안내</Text>
-        <InstructionPicker value={dropoffInstruction} onChange={setDropoffInstruction} />
+        <InstructionPicker
+          presets={DROPOFF_INSTRUCTION_PRESETS}
+          value={dropoffInstruction}
+          onChange={setDropoffInstruction}
+        />
       </View>
 
       <View style={styles.card}>
@@ -310,11 +319,11 @@ export default function NewItemScreen() {
       <View style={styles.card}>
         <View style={styles.sectionHeader}>
           <Ionicons name="time" size={16} color={colors.primary} />
-          <Text style={styles.sectionTitle}>픽업 마감 시각</Text>
+          <Text style={styles.sectionTitle}>선택 마감 시각</Text>
         </View>
-        <Text style={styles.helperText}>이 시각까지 픽업되지 않으면 마감돼요</Text>
-        <Text style={styles.deadlineValue}>{validUntil.toLocaleString()}</Text>
-        <Button title="픽업 마감 시각 변경" onPress={openValidUntilPicker} variant="outline" />
+        <Text style={styles.helperText}>이 시각까지 선택되지 않으면 마감돼요</Text>
+        <Text style={styles.deadlineValue}>{formatDateTime(validUntil)}</Text>
+        <Button title="선택 마감 시각 변경" onPress={openValidUntilPicker} variant="outline" />
         {Platform.OS === 'ios' && showTimePicker && (
           <>
             <DateTimePicker
@@ -336,10 +345,10 @@ export default function NewItemScreen() {
           <Text style={styles.sectionTitle}>배송완료 마감 시각</Text>
         </View>
         <Text style={styles.helperText}>이 시각까지 배송이 완료돼야 해요</Text>
-        <Text style={styles.deadlineValue}>{deliveryDeadline.toLocaleString()}</Text>
+        <Text style={styles.deadlineValue}>{formatDateTime(deliveryDeadline)}</Text>
         <Button title="배송완료 마감 시각 변경" onPress={openDeliveryDeadlinePicker} variant="outline" />
         {deadlineOrderInvalid && (
-          <Text style={styles.errorText}>픽업 마감 시각보다 늦어야 해요</Text>
+          <Text style={styles.errorText}>선택 마감 시각보다 늦어야 해요</Text>
         )}
         {Platform.OS === 'ios' && showDeliveryDeadlinePicker && (
           <>

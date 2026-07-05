@@ -6,6 +6,7 @@ import {
   type PropsWithChildren,
   type SetStateAction,
 } from 'react';
+import type { ItemBundle } from './bundleSearch';
 
 export type Place = {
   address: string;
@@ -35,6 +36,7 @@ export type Item = {
   status: string;
   uploader_id: string;
   selected_by: string | null;
+  selected_group_id: string | null;
   pickup_eta: string | null;
   delivery_eta: string | null;
   delivery_photo_url: string | null;
@@ -45,6 +47,9 @@ export type Item = {
 export type RouteCandidate = Item & {
   detourMinutes: number;
   extraTollFare: number;
+  // latest the first pickup can happen and still make this item's own
+  // delivery_deadline, given the pickup->dropoff leg duration
+  latestPickupBy: string | null;
 };
 
 type SearchContextValue = {
@@ -54,6 +59,10 @@ type SearchContextValue = {
   setDestination: Dispatch<SetStateAction<Place | null>>;
   results: RouteCandidate[];
   setResults: Dispatch<SetStateAction<RouteCandidate[]>>;
+  packageResults: ItemBundle[];
+  setPackageResults: Dispatch<SetStateAction<ItemBundle[]>>;
+  selectedPackage: ItemBundle | null;
+  setSelectedPackage: Dispatch<SetStateAction<ItemBundle | null>>;
 };
 
 const SearchContext = createContext<SearchContextValue | null>(null);
@@ -62,6 +71,8 @@ export function SearchProvider({ children }: PropsWithChildren) {
   const [origin, setOrigin] = useState<Place | null>(null);
   const [destination, setDestination] = useState<Place | null>(null);
   const [results, setResults] = useState<RouteCandidate[]>([]);
+  const [packageResults, setPackageResults] = useState<ItemBundle[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<ItemBundle | null>(null);
 
   return (
     <SearchContext.Provider
@@ -72,6 +83,10 @@ export function SearchProvider({ children }: PropsWithChildren) {
         setDestination,
         results,
         setResults,
+        packageResults,
+        setPackageResults,
+        selectedPackage,
+        setSelectedPackage,
       }}
     >
       {children}

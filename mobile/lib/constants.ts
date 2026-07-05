@@ -9,6 +9,12 @@ export const PLATFORM_FEE_RATE = 0.2;
 export const FUEL_EFFICIENCY_KM_PER_L = 14;
 export const FUEL_PRICE_PER_L = 1700;
 
+export const PICKUP_INSTRUCTION_PRESETS = [
+  '대문 앞에서 픽업하고 초인종 눌러주세요',
+  '경비실에서 수령',
+  '초인종 누르고 당사자 또는 동거가족에게 직접 수령',
+];
+
 export const DROPOFF_INSTRUCTION_PRESETS = [
   '대문 앞에 두고 초인종 누르고 가기',
   '경비실에 보관',

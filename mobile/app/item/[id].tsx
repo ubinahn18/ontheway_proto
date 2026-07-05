@@ -10,14 +10,16 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFunction } from '../../lib/kakaoFunctions';
 import { uploadItemPhoto } from '../../lib/uploadPhoto';
+import { openAndroidDateTimePicker } from '../../lib/openAndroidDateTimePicker';
 import { useSearch, type Item } from '../../lib/SearchContext';
 import { statusLabel } from '../../lib/itemStatus';
-import { FUEL_EFFICIENCY_KM_PER_L, FUEL_PRICE_PER_L } from '../../lib/constants';
+import { calcFuelCost } from '../../lib/fuelCost';
+import { formatDateTime } from '../../lib/formatDateTime';
 import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
 import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/StatusBadge';
@@ -30,6 +32,13 @@ type NaviResult = {
   diffMinutes: number;
   extraDistanceMeters: number;
   extraTollFare: number;
+  legDurationsSec: number[];
+};
+
+type GroupTotals = {
+  total_detour_minutes: number;
+  total_extra_toll_fare: number;
+  total_extra_distance_meters: number;
 };
 
 export default function ItemDetailScreen() {
@@ -52,6 +61,10 @@ export default function ItemDetailScreen() {
   const [showEtaPicker, setShowEtaPicker] = useState(false);
   const [deliveryPhotoUri, setDeliveryPhotoUri] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
+  // only shown when this item was selected on its own (group size 1) — for
+  // a real multi-item bundle the aggregate is already visible on the
+  // selection-group screen, so it's not repeated on each item's own page
+  const [soloGroupTotals, setSoloGroupTotals] = useState<GroupTotals | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -67,7 +80,11 @@ export default function ItemDetailScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (!item || !origin || !destination) return;
+    // once an item is selected, its real trip may include other items from
+    // the same bundle — recomputing a solo origin->pickup->dropoff->dest
+    // detour here would no longer reflect that actual route, so this only
+    // runs pre-selection
+    if (!item || !origin || !destination || item.status !== 'available') return;
     setNaviLoading(true);
     callFunction<NaviResult>('kakao-navi-proxy', {
       originLng: origin.lng,
@@ -84,6 +101,25 @@ export default function ItemDetailScreen() {
       .finally(() => setNaviLoading(false));
   }, [item, origin, destination]);
 
+  useEffect(() => {
+    if (!item || item.status === 'available' || !item.selected_group_id) return;
+    const groupId = item.selected_group_id;
+    (async () => {
+      const { count } = await supabase
+        .from('items')
+        .select('id', { count: 'exact', head: true })
+        .eq('selected_group_id', groupId);
+      if (count !== 1) return; // real multi-item bundle — shown on the group screen instead
+
+      const { data } = await supabase
+        .from('selection_groups')
+        .select('total_detour_minutes, total_extra_toll_fare, total_extra_distance_meters')
+        .eq('id', groupId)
+        .maybeSingle();
+      setSoloGroupTotals(data as GroupTotals | null);
+    })();
+  }, [item]);
+
   async function select() {
     if (!item) return;
     if (!pickupEta || !deliveryEta) {
@@ -94,12 +130,22 @@ export default function ItemDetailScreen() {
       Alert.alert('픽업 시간은 배달 예상시각보다 빨라야 해요');
       return;
     }
+    if (latestPickupBy && pickupEta > latestPickupBy) {
+      Alert.alert(
+        '픽업 시간이 너무 늦어요',
+        `배송완료 마감을 맞추려면 픽업을 ${formatDateTime(latestPickupBy)} 이전에 해야 해요`
+      );
+      return;
+    }
     setSelecting(true);
     try {
-      const { error } = await supabase.rpc('select_item', {
-        p_item_id: item.id,
-        p_pickup_eta: pickupEta.toISOString(),
-        p_delivery_eta: deliveryEta.toISOString(),
+      const { error } = await supabase.rpc('select_items', {
+        p_item_ids: [item.id],
+        p_pickup_etas: [pickupEta.toISOString()],
+        p_delivery_etas: [deliveryEta.toISOString()],
+        p_total_detour_minutes: navi?.diffMinutes ?? 0,
+        p_total_extra_toll_fare: navi?.extraTollFare ?? 0,
+        p_total_extra_distance_meters: navi?.extraDistanceMeters ?? 0,
       });
       if (error) throw error;
       Alert.alert('선택 완료', '업로더에게 알림이 전송됐어요');
@@ -134,25 +180,21 @@ export default function ItemDetailScreen() {
     }
   }
 
+  // setting the pickup time auto-fills the delivery estimate from the
+  // pickup->dropoff leg of the already-fetched route (middle leg of the
+  // 3-leg origin->pickup->dropoff->destination via route) — the deliverer
+  // can still adjust the delivery time afterward with its own picker
+  function applyPickupEta(newPickupEta: Date) {
+    setPickupEta(newPickupEta);
+    const pickupToDropoffSec = navi?.legDurationsSec?.[1];
+    if (typeof pickupToDropoffSec === 'number') {
+      setDeliveryEta(new Date(newPickupEta.getTime() + pickupToDropoffSec * 1000));
+    }
+  }
+
   function openPickupEtaPicker() {
     if (Platform.OS === 'android') {
-      DateTimePickerAndroid.open({
-        value: pickupEta ?? new Date(),
-        mode: 'date',
-        onChange: (_, pickedDate) => {
-          if (!pickedDate) return;
-          DateTimePickerAndroid.open({
-            value: pickupEta ?? new Date(),
-            mode: 'time',
-            onChange: (_, pickedTime) => {
-              if (!pickedTime) return;
-              const combined = new Date(pickedDate);
-              combined.setHours(pickedTime.getHours(), pickedTime.getMinutes());
-              setPickupEta(combined);
-            },
-          });
-        },
-      });
+      openAndroidDateTimePicker(pickupEta ?? new Date(), applyPickupEta);
     } else {
       setShowPickupEtaPicker(true);
     }
@@ -160,25 +202,7 @@ export default function ItemDetailScreen() {
 
   function openEtaPicker() {
     if (Platform.OS === 'android') {
-      // Android has no combined "datetime" dialog — chain a date picker
-      // into a time picker and merge the two results.
-      DateTimePickerAndroid.open({
-        value: deliveryEta ?? new Date(),
-        mode: 'date',
-        onChange: (_, pickedDate) => {
-          if (!pickedDate) return;
-          DateTimePickerAndroid.open({
-            value: deliveryEta ?? new Date(),
-            mode: 'time',
-            onChange: (_, pickedTime) => {
-              if (!pickedTime) return;
-              const combined = new Date(pickedDate);
-              combined.setHours(pickedTime.getHours(), pickedTime.getMinutes());
-              setDeliveryEta(combined);
-            },
-          });
-        },
-      });
+      openAndroidDateTimePicker(deliveryEta ?? new Date(), setDeliveryEta);
     } else {
       setShowEtaPicker(true);
     }
@@ -230,6 +254,14 @@ export default function ItemDetailScreen() {
   const canMarkDelivered = item.status === 'selected' && isSelector;
   const canConfirmDelivery = item.status === 'delivered' && isOwnItem;
 
+  // legDurationsSec is [origin->pickup, pickup->dropoff, dropoff->destination]
+  // — the middle leg is what a pickup time has to clear the delivery deadline by
+  const pickupToDropoffSec = navi?.legDurationsSec?.[1];
+  const latestPickupBy =
+    item.delivery_deadline && typeof pickupToDropoffSec === 'number'
+      ? new Date(new Date(item.delivery_deadline).getTime() - pickupToDropoffSec * 1000)
+      : null;
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       {item.photo_url ? (
@@ -274,9 +306,9 @@ export default function ItemDetailScreen() {
       <View style={styles.card}>
         <View style={styles.sectionHeader}>
           <Ionicons name="time" size={16} color={colors.primary} />
-          <Text style={styles.sectionTitle}>픽업 마감 시각</Text>
+          <Text style={styles.sectionTitle}>선택 마감 시각</Text>
         </View>
-        <Text style={styles.bodyText}>{new Date(item.valid_until).toLocaleString()}</Text>
+        <Text style={styles.bodyText}>{formatDateTime(item.valid_until)}</Text>
 
         {item.delivery_deadline && (
           <>
@@ -285,7 +317,7 @@ export default function ItemDetailScreen() {
               <Ionicons name="checkmark-done" size={16} color={colors.primary} />
               <Text style={styles.sectionTitle}>배송완료 마감 시각</Text>
             </View>
-            <Text style={styles.bodyText}>{new Date(item.delivery_deadline).toLocaleString()}</Text>
+            <Text style={styles.bodyText}>{formatDateTime(item.delivery_deadline)}</Text>
           </>
         )}
 
@@ -296,7 +328,7 @@ export default function ItemDetailScreen() {
               <Ionicons name="navigate" size={16} color={colors.primary} />
               <Text style={styles.sectionTitle}>픽업 예정 시각</Text>
             </View>
-            <Text style={styles.bodyText}>{new Date(item.pickup_eta).toLocaleString()}</Text>
+            <Text style={styles.bodyText}>{formatDateTime(item.pickup_eta)}</Text>
           </>
         )}
 
@@ -307,43 +339,56 @@ export default function ItemDetailScreen() {
               <Ionicons name="alarm" size={16} color={colors.primary} />
               <Text style={styles.sectionTitle}>배달 예상 시각</Text>
             </View>
-            <Text style={styles.bodyText}>{new Date(item.delivery_eta).toLocaleString()}</Text>
+            <Text style={styles.bodyText}>{formatDateTime(item.delivery_eta)}</Text>
           </>
         )}
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="car" size={16} color={colors.primary} />
-          <Text style={styles.sectionTitle}>경유 시 추가 소요 시간 · 비용 추정</Text>
-        </View>
-        {!origin || !destination ? (
-          <Text style={styles.helperText}>
-            둘러보기 탭에서 내 출발지/목적지를 먼저 설정해야 계산할 수 있어요
-          </Text>
-        ) : naviLoading ? (
-          <ActivityIndicator color={colors.primary} />
-        ) : naviError ? (
-          <Text style={styles.helperText}>{naviError}</Text>
-        ) : navi ? (
-          <View style={styles.costBox}>
-            <Text style={styles.diff}>+{navi.diffMinutes}분 더 소요</Text>
-            <Text style={styles.costLine}>
-              추정 주유비: 약{' '}
-              {Math.max(
-                0,
-                Math.round(
-                  (navi.extraDistanceMeters / 1000 / FUEL_EFFICIENCY_KM_PER_L) * FUEL_PRICE_PER_L
-                )
-              ).toLocaleString()}
-              원
-            </Text>
-            <Text style={styles.costLine}>
-              추정 도로비 차이: 약 {Math.max(0, navi.extraTollFare).toLocaleString()}원
-            </Text>
+      {item.status === 'available' ? (
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="car" size={16} color={colors.primary} />
+            <Text style={styles.sectionTitle}>경유 시 추가 소요 시간 · 비용 추정</Text>
           </View>
-        ) : null}
-      </View>
+          {!origin || !destination ? (
+            <Text style={styles.helperText}>
+              둘러보기 탭에서 내 출발지/목적지를 먼저 설정해야 계산할 수 있어요
+            </Text>
+          ) : naviLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : naviError ? (
+            <Text style={styles.helperText}>{naviError}</Text>
+          ) : navi ? (
+            <View style={styles.costBox}>
+              <Text style={styles.diff}>+{navi.diffMinutes}분 더 소요</Text>
+              <Text style={styles.costLine}>
+                추정 주유비: 약 {calcFuelCost(navi.extraDistanceMeters).toLocaleString()}원
+              </Text>
+              <Text style={styles.costLine}>
+                추정 도로비 차이: 약 {navi.extraTollFare.toLocaleString()}원
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        soloGroupTotals && (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="car" size={16} color={colors.primary} />
+              <Text style={styles.sectionTitle}>추가 소요 시간 · 비용</Text>
+            </View>
+            <View style={styles.costBox}>
+              <Text style={styles.diff}>+{soloGroupTotals.total_detour_minutes}분 더 소요</Text>
+              <Text style={styles.costLine}>
+                추정 주유비: 약 {calcFuelCost(soloGroupTotals.total_extra_distance_meters).toLocaleString()}원
+              </Text>
+              <Text style={styles.costLine}>
+                추정 도로비 차이: 약 {soloGroupTotals.total_extra_toll_fare.toLocaleString()}원
+              </Text>
+            </View>
+          </View>
+        )
+      )}
 
       {canSelect && (
         <View style={styles.card}>
@@ -351,8 +396,13 @@ export default function ItemDetailScreen() {
             <Ionicons name="navigate-outline" size={16} color={colors.primary} />
             <Text style={styles.sectionTitle}>픽업 예정 시각</Text>
           </View>
+          {latestPickupBy && (
+            <Text style={styles.helperText}>
+              배송완료 마감을 맞추려면 {formatDateTime(latestPickupBy)} 이전에 픽업해야 해요
+            </Text>
+          )}
           <Button
-            title={pickupEta ? pickupEta.toLocaleString() : '픽업 예정 시각 선택'}
+            title={pickupEta ? formatDateTime(pickupEta) : '픽업 예정 시각 선택'}
             onPress={openPickupEtaPicker}
             variant="outline"
           />
@@ -363,7 +413,7 @@ export default function ItemDetailScreen() {
                 mode="datetime"
                 display="spinner"
                 onChange={(_, date) => {
-                  if (date) setPickupEta(date);
+                  if (date) applyPickupEta(date);
                 }}
               />
               <Button title="완료" onPress={() => setShowPickupEtaPicker(false)} variant="outline" />
@@ -377,7 +427,7 @@ export default function ItemDetailScreen() {
             <Text style={styles.sectionTitle}>배달 예상 시각</Text>
           </View>
           <Button
-            title={deliveryEta ? deliveryEta.toLocaleString() : '배달 예상 시각 선택'}
+            title={deliveryEta ? formatDateTime(deliveryEta) : '배달 예상 시각 선택'}
             onPress={openEtaPicker}
             variant="outline"
           />

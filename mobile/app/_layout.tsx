@@ -75,6 +75,14 @@ function RootLayoutNav() {
         name="terms"
         options={{ headerShown: true, title: '이용약관' }}
       />
+      <Stack.Screen
+        name="bundle-review"
+        options={{ headerShown: true, title: '배송 묶음 확인' }}
+      />
+      <Stack.Screen
+        name="selection-group/[id]"
+        options={{ headerShown: true, title: '배송 묶음 상세' }}
+      />
     </Stack>
   );
 }

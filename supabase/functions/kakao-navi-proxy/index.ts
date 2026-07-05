@@ -14,14 +14,31 @@ Deno.serve(async (req) => {
     pickupLat,
     dropoffLng,
     dropoffLat,
+    waypoints: providedWaypoints,
     directDurationSec: providedDirectDurationSec,
     directDistanceMeters: providedDirectDistanceMeters,
     directTollFare: providedDirectTollFare,
   } = await req.json();
 
-  const coords = { originLng, originLat, destLng, destLat, pickupLng, pickupLat, dropoffLng, dropoffLat };
-  if (Object.values(coords).some((v) => typeof v !== 'number')) {
+  const baseCoords = { originLng, originLat, destLng, destLat };
+  if (Object.values(baseCoords).some((v) => typeof v !== 'number')) {
     return new Response(JSON.stringify({ error: 'all coordinates must be numbers' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // multi-item bundles pass an ordered waypoints list; single-item callers
+  // keep passing pickup/dropoff directly (kept for backwards compatibility)
+  const waypoints: { lng: number; lat: number; label?: string }[] = Array.isArray(providedWaypoints)
+    ? providedWaypoints
+    : [
+        { lng: pickupLng, lat: pickupLat, label: 'pickup' },
+        { lng: dropoffLng, lat: dropoffLat, label: 'dropoff' },
+      ];
+
+  if (waypoints.some((w) => typeof w.lng !== 'number' || typeof w.lat !== 'number')) {
+    return new Response(JSON.stringify({ error: 'all waypoints must have numeric lng/lat' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -48,12 +65,11 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       origin: { x: originLng, y: originLat },
       destination: { x: destLng, y: destLat },
-      // pickup must precede dropoff: you cannot deliver an item before picking it up
-      waypoints: [
-        { x: pickupLng, y: pickupLat, name: 'pickup' },
-        { x: dropoffLng, y: dropoffLat, name: 'dropoff' },
-      ],
+      // order matters: caller is responsible for each item's pickup preceding
+      // its own dropoff (you cannot deliver an item before picking it up)
+      waypoints: waypoints.map((w, i) => ({ x: w.lng, y: w.lat, name: w.label ?? `stop${i + 1}` })),
       priority: 'RECOMMEND',
+      road_details: true,
     }),
   });
 
@@ -95,6 +111,23 @@ Deno.serve(async (req) => {
     );
   }
 
+  const sections = viaData.routes?.[0]?.sections ?? [];
+
+  const viaVertices: { lng: number; lat: number }[] = [];
+  for (const section of sections) {
+    for (const road of section.roads ?? []) {
+      const vertexes: number[] = road.vertexes ?? [];
+      for (let i = 0; i + 1 < vertexes.length; i += 2) {
+        viaVertices.push({ lng: vertexes[i], lat: vertexes[i + 1] });
+      }
+    }
+  }
+
+  // one section per leg: origin->stop1, stop1->stop2, ..., stopN->destination
+  // (2n+1 total legs for n items/2n waypoints) — used to auto-fill each
+  // stop's estimated pickup/delivery time from a single starting time
+  const legDurationsSec: number[] = sections.map((s: { distance: number; duration: number }) => s.duration);
+
   return new Response(
     JSON.stringify({
       directDurationSec,
@@ -103,6 +136,10 @@ Deno.serve(async (req) => {
       // extra distance/toll caused by the detour, not the full via-route totals
       extraDistanceMeters: viaDistanceMeters - directDistanceMeters,
       extraTollFare: viaTollFare - directTollFare,
+      // full via-route polyline (origin -> ...stops... -> destination), used
+      // by the map screen to draw the actual route once an item is selected
+      viaVertices,
+      legDurationsSec,
     }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );

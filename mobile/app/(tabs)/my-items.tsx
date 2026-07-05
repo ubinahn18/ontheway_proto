@@ -44,11 +44,6 @@ export default function MyItemsScreen() {
       ListHeaderComponent={
         <View style={styles.header}>
           <Button title="배송요청 등록" onPress={() => router.push('/item/new')} />
-          <Button
-            title="주문 이력 보기"
-            onPress={() => router.push('/history/orders')}
-            variant="outline"
-          />
         </View>
       }
       renderItem={({ item }) => (

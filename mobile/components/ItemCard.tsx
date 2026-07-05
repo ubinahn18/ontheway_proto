@@ -1,6 +1,7 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Item } from '../lib/SearchContext';
+import { formatDateTime } from '../lib/formatDateTime';
 import { colors, radius, shadow, spacing, typography } from '../lib/theme';
 import { StatusBadge } from './ui/StatusBadge';
 
@@ -9,11 +10,13 @@ export function ItemCard({
   onPress,
   detourMinutes,
   extraTollFare,
+  latestPickupBy,
 }: {
   item: Item;
   onPress: () => void;
   detourMinutes?: number;
   extraTollFare?: number;
+  latestPickupBy?: string | null;
 }) {
   return (
     <Pressable
@@ -48,9 +51,16 @@ export function ItemCard({
           <View style={styles.detourRow}>
             <Ionicons name="time-outline" size={12} color={colors.primary} />
             <Text style={styles.detourText}>
-              +{detourMinutes}분{typeof extraTollFare === 'number' && extraTollFare > 0
-                ? ` · 톨비 ${extraTollFare.toLocaleString()}원`
-                : ''}
+              +{detourMinutes}분
+              {typeof extraTollFare === 'number' ? ` · 톨비 ${extraTollFare.toLocaleString()}원` : ''}
+            </Text>
+          </View>
+        )}
+        {latestPickupBy && (
+          <View style={styles.detourRow}>
+            <Ionicons name="alarm-outline" size={12} color={colors.danger} />
+            <Text style={styles.deadlineText}>
+              {formatDateTime(latestPickupBy)} 이전 출발 필요
             </Text>
           </View>
         )}
@@ -117,6 +127,11 @@ const styles = StyleSheet.create({
   detourText: {
     ...typography.caption,
     color: colors.primary,
+    fontWeight: '600',
+  },
+  deadlineText: {
+    ...typography.caption,
+    color: colors.danger,
     fontWeight: '600',
   },
 });

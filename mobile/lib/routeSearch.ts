@@ -24,6 +24,7 @@ type DirectRoute = {
 type NaviResult = {
   diffMinutes: number;
   extraTollFare: number;
+  legDurationsSec: number[];
 };
 
 function toRouteWkt(vertices: { lng: number; lat: number }[]): string {
@@ -84,7 +85,23 @@ export async function searchItemsAlongRoute(
         directDistanceMeters: directRoute.distanceMeters,
         directTollFare: directRoute.tollFare,
       });
-      return { ...item, detourMinutes: navi.diffMinutes, extraTollFare: navi.extraTollFare };
+      // legDurationsSec is [origin->pickup, pickup->dropoff, dropoff->destination]
+      // — the middle leg is what a pickup time has to clear the delivery
+      // deadline by
+      const pickupToDropoffSec = navi.legDurationsSec[1];
+      const latestPickupBy = item.delivery_deadline
+        ? new Date(new Date(item.delivery_deadline).getTime() - pickupToDropoffSec * 1000)
+        : null;
+      if (latestPickupBy && latestPickupBy.getTime() < Date.now()) return null; // can't make the deadline anymore
+
+      return {
+        ...item,
+        detourMinutes: navi.diffMinutes,
+        // can legitimately be negative — a detour can avoid a toll the
+        // direct route would have taken, genuinely saving money
+        extraTollFare: navi.extraTollFare,
+        latestPickupBy: latestPickupBy?.toISOString() ?? null,
+      };
     } catch {
       // kakao navi occasionally rejects a specific waypoint (road incidents
       // etc.) — drop that one candidate rather than failing the whole search

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { DROPOFF_INSTRUCTION_PRESETS } from '../lib/constants';
 import { spacing } from '../lib/theme';
 import { Chip } from './ui/Chip';
 import { TextField } from './ui/TextField';
@@ -8,14 +7,16 @@ import { TextField } from './ui/TextField';
 const CUSTOM = '__custom__';
 
 export function InstructionPicker({
+  presets,
   value,
   onChange,
 }: {
+  presets: string[];
   value: string;
   onChange: (value: string) => void;
 }) {
   const [mode, setMode] = useState<string>(
-    DROPOFF_INSTRUCTION_PRESETS.includes(value) || !value ? value || '' : CUSTOM
+    presets.includes(value) || !value ? value || '' : CUSTOM
   );
 
   function selectPreset(preset: string) {
@@ -31,7 +32,7 @@ export function InstructionPicker({
   return (
     <View style={styles.container}>
       <View style={styles.chipRow}>
-        {DROPOFF_INSTRUCTION_PRESETS.map((preset) => (
+        {presets.map((preset) => (
           <Chip
             key={preset}
             label={preset}
