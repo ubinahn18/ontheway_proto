@@ -20,6 +20,7 @@ import { useSearch, type Item } from '../../lib/SearchContext';
 import { statusLabel } from '../../lib/itemStatus';
 import { calcFuelCost } from '../../lib/fuelCost';
 import { formatDateTime } from '../../lib/formatDateTime';
+import { getErrorMessage } from '../../lib/errorMessage';
 import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
 import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/StatusBadge';
@@ -97,7 +98,7 @@ export default function ItemDetailScreen() {
       dropoffLat: item.dropoff_lat,
     })
       .then(setNavi)
-      .catch((e) => setNaviError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setNaviError(getErrorMessage(e)))
       .finally(() => setNaviLoading(false));
   }, [item, origin, destination]);
 
@@ -151,7 +152,7 @@ export default function ItemDetailScreen() {
       Alert.alert('선택 완료', '업로더에게 알림이 전송됐어요');
       router.back();
     } catch (e) {
-      Alert.alert('선택 실패', e instanceof Error ? e.message : String(e));
+      Alert.alert('선택 실패', getErrorMessage(e));
     } finally {
       setSelecting(false);
     }
@@ -174,7 +175,7 @@ export default function ItemDetailScreen() {
       Alert.alert('배송 완료 처리했어요', '업로더에게 알림이 전송됐어요');
       router.back();
     } catch (e) {
-      Alert.alert('처리 실패', e instanceof Error ? e.message : String(e));
+      Alert.alert('처리 실패', getErrorMessage(e));
     } finally {
       setDelivering(false);
     }
@@ -224,7 +225,7 @@ export default function ItemDetailScreen() {
       Alert.alert('배송을 확인했어요', '거래가 완료됐어요');
       router.back();
     } catch (e) {
-      Alert.alert('처리 실패', e instanceof Error ? e.message : String(e));
+      Alert.alert('처리 실패', getErrorMessage(e));
     } finally {
       setConfirming(false);
     }

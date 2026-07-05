@@ -21,6 +21,7 @@ import { InstructionPicker } from '../../components/InstructionPicker';
 import { MAX_ITEM_PRICE, PICKUP_INSTRUCTION_PRESETS, DROPOFF_INSTRUCTION_PRESETS } from '../../lib/constants';
 import { calcPlatformFee } from '../../lib/fee';
 import { formatDateTime } from '../../lib/formatDateTime';
+import { getErrorMessage } from '../../lib/errorMessage';
 import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
 import { Button } from '../../components/ui/Button';
 import { TextField } from '../../components/ui/TextField';
@@ -74,7 +75,7 @@ export default function NewItemScreen() {
       );
       setPickup({ address: data.address ?? '', district: data.district, lng, lat });
     } catch (e) {
-      Alert.alert('위치를 가져오지 못했어요', e instanceof Error ? e.message : String(e));
+      Alert.alert('위치를 가져오지 못했어요', getErrorMessage(e));
     } finally {
       setLocating(false);
     }
@@ -87,7 +88,7 @@ export default function NewItemScreen() {
       const data = await callFunction<Place>('kakao-address-search', { query: pickupQuery });
       setPickup(data);
     } catch (e) {
-      Alert.alert('주소를 찾지 못했어요', e instanceof Error ? e.message : String(e));
+      Alert.alert('주소를 찾지 못했어요', getErrorMessage(e));
     } finally {
       setSearchingPickup(false);
     }
@@ -100,7 +101,7 @@ export default function NewItemScreen() {
       const data = await callFunction<Place>('kakao-address-search', { query: dropoffQuery });
       setDropoff(data);
     } catch (e) {
-      Alert.alert('주소를 찾지 못했어요', e instanceof Error ? e.message : String(e));
+      Alert.alert('주소를 찾지 못했어요', getErrorMessage(e));
     } finally {
       setSearchingDropoff(false);
     }
@@ -205,7 +206,7 @@ export default function NewItemScreen() {
 
       router.back();
     } catch (e) {
-      Alert.alert('등록 실패', e instanceof Error ? e.message : String(e));
+      Alert.alert('등록 실패', getErrorMessage(e));
     } finally {
       setSubmitting(false);
     }

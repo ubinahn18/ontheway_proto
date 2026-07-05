@@ -7,6 +7,7 @@ import { callFunction } from '../../lib/kakaoFunctions';
 import { useSearch } from '../../lib/SearchContext';
 import { searchItemsAlongRoute } from '../../lib/routeSearch';
 import { searchItemBundles } from '../../lib/bundleSearch';
+import { getErrorMessage } from '../../lib/errorMessage';
 import { colors, radius, shadow, spacing, typography } from '../../lib/theme';
 import { Button } from '../../components/ui/Button';
 import { TextField } from '../../components/ui/TextField';
@@ -66,7 +67,7 @@ export default function BrowseScreen() {
       );
       setOrigin({ address: data.address ?? '', district: data.district, lng, lat });
     } catch (e) {
-      Alert.alert('위치를 가져오지 못했어요', e instanceof Error ? e.message : String(e));
+      Alert.alert('위치를 가져오지 못했어요', getErrorMessage(e));
     } finally {
       setLocating(false);
     }
@@ -84,7 +85,7 @@ export default function BrowseScreen() {
       }>('kakao-address-search', { query: originQuery });
       setOrigin(data);
     } catch (e) {
-      Alert.alert('주소를 찾지 못했어요', e instanceof Error ? e.message : String(e));
+      Alert.alert('주소를 찾지 못했어요', getErrorMessage(e));
     } finally {
       setSearchingOrigin(false);
     }
@@ -102,7 +103,7 @@ export default function BrowseScreen() {
       }>('kakao-address-search', { query: destQuery });
       setDestination(data);
     } catch (e) {
-      Alert.alert('주소를 찾지 못했어요', e instanceof Error ? e.message : String(e));
+      Alert.alert('주소를 찾지 못했어요', getErrorMessage(e));
     } finally {
       setSearchingDest(false);
     }
@@ -125,7 +126,7 @@ export default function BrowseScreen() {
         setResults([]);
       }
     } catch (e) {
-      Alert.alert('검색 실패', e instanceof Error ? e.message : String(e));
+      Alert.alert('검색 실패', getErrorMessage(e));
     } finally {
       setSearching(false);
     }

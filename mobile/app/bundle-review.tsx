@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { useSearch } from '../lib/SearchContext';
 import { openAndroidDateTimePicker } from '../lib/openAndroidDateTimePicker';
 import { formatDateTime } from '../lib/formatDateTime';
+import { getErrorMessage } from '../lib/errorMessage';
 import { colors, radius, shadow, spacing, typography } from '../lib/theme';
 import { Button } from '../components/ui/Button';
 
@@ -95,7 +96,7 @@ export default function BundleReviewScreen() {
       setSelectedPackage(null);
       router.back();
     } catch (e) {
-      Alert.alert('선택 실패', e instanceof Error ? e.message : String(e));
+      Alert.alert('선택 실패', getErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
@@ -141,6 +142,7 @@ export default function BundleReviewScreen() {
 
             {isPickup ? (
               <>
+                <Text style={styles.bodyText}>{item.pickup_address}</Text>
                 <View style={styles.itemInfoRow}>
                   {item.photo_url ? (
                     <Image source={{ uri: item.photo_url }} style={styles.thumb} />

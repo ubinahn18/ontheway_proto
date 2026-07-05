@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Image, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { signInWithKakao } from '../../lib/kakaoAuth';
+import { getErrorMessage } from '../../lib/errorMessage';
 import { colors, spacing, typography } from '../../lib/theme';
 import { Button } from '../../components/ui/Button';
 import { TextField } from '../../components/ui/TextField';
@@ -16,7 +17,7 @@ export default function SignInScreen() {
     try {
       await signInWithKakao();
     } catch (e) {
-      Alert.alert('카카오 로그인 실패', e instanceof Error ? e.message : String(e));
+      Alert.alert('카카오 로그인 실패', getErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
